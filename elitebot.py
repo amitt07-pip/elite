@@ -415,12 +415,10 @@ def build_vouch_keyboard(escrow_id):
     return InlineKeyboardMarkup([[button]])
 
 
-def build_fee_selection_message(escrow_id, data):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+def build_room_initial_message(escrow_id, data):
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
-    rate = data["rate"]
-    total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
     escrow_id_str = f"{escrow_id:08d}"
@@ -429,33 +427,74 @@ def build_fee_selection_message(escrow_id, data):
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
+💱 <b>Rate</b>: ** INR/USDT
+💰 <b>Total INR</b>: **
+🕒 <b>Time</b>: {time_val}
+
+<b>Status</b>: Private room created. Buyer &amp; Seller must join via the join-request link.
+<i>Only the buyer/seller for this deal will be accepted.</i>"""
+
+    return message
+
+
+def build_room_initial_keyboard(invite_link):
+    button = InlineKeyboardButton(
+        "🔗 Join Private Room",
+        url=invite_link
+    )
+    return InlineKeyboardMarkup([[button]])
+
+
+def build_fee_selection_message(escrow_id, data):
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
+    amount = data["amount"]
+    rate = data["rate"]
+    total_inr = data["total_inr"]
+    time_val = escape_html(data["time"])
+
+    # Escrow fees (currently free)
+    buyer_fee = 0.00
+    seller_fee = 0.00
+    total_fee = 0.00
+
+    escrow_id_str = f"{escrow_id:08d}"
+
+    message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
+━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
+👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+
+✅ <b>Seller</b>: {seller}
+✅ <b>Buyer</b>: {buyer}
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
-
-<b>Status</b>: Choose who bears the platform fee.
-<b>Both parties</b> must accept the selected mode."""
+<b>Status</b>: Agree who pays the escrow fee to start escrow creation.
+💸 Total fee: <code>{total_fee:.2f}</code> USDT (non-refundable)
+⏳ <b>Buyer fee confirm</b>: {buyer} | ⏳ <b>Seller fee confirm</b>: {seller}"""
 
     return message
 
 
 def build_fee_selection_keyboard(escrow_id):
     buyer_pays = InlineKeyboardButton(
-        "Fee: Buyer pays",
+        "💸 Fee: Buyer pays",
         callback_data=f"fee:{escrow_id}:buyer_pays"
     )
     seller_pays = InlineKeyboardButton(
-        "Fee: Seller pays",
+        "💸 Fee: Seller pays",
         callback_data=f"fee:{escrow_id}:seller_pays"
     )
     split = InlineKeyboardButton(
-        "Fee: Split",
+        "💸 Fee: Split 50/50",
         callback_data=f"fee:{escrow_id}:split"
     )
-    return InlineKeyboardMarkup([[buyer_pays], [seller_pays], [split]])
+    return InlineKeyboardMarkup([[buyer_pays, seller_pays], [split]])
 
 
 def build_fee_acceptance_message(escrow_id, data, seller_accepted=False,
@@ -1608,32 +1647,28 @@ async def handle_new_chat_members(update: Update,
     if bot_was_added:
         escrow_id, escrow = get_escrow_by_room_chat_id(chat_id)
         if escrow_id:
-            escrow_id_str = f"{escrow_id:08d}"
-            welcome_msg = (
-                f"<b>Escrow Room</b> <code>{escrow_id_str}</code>\n"
-                "This is the private room for this deal.\n"
-                "The escrow steps will continue here."
-            )
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=welcome_msg,
-                parse_mode="HTML"
-            )
-
-            fee_msg = build_fee_selection_message(escrow_id, escrow)
-            fee_keyboard = build_fee_selection_keyboard(escrow_id)
-            sent_fee_msg = await context.bot.send_message(
-                chat_id=chat_id,
-                text=fee_msg,
-                parse_mode="HTML",
-                reply_markup=fee_keyboard
-            )
-
-            update_escrow(escrow_id, {
-                "room_fee_message_id": sent_fee_msg.message_id
-            })
-
             try:
+                room_invite = await context.bot.create_chat_invite_link(
+                    chat_id=chat_id,
+                    creates_join_request=True,
+                    name="Room link"
+                )
+
+                room_msg = build_room_initial_message(escrow_id, escrow)
+                room_keyboard = build_room_initial_keyboard(
+                    room_invite.invite_link
+                )
+                sent_room_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=room_msg,
+                    parse_mode="HTML",
+                    reply_markup=room_keyboard
+                )
+
+                update_escrow(escrow_id, {
+                    "room_fee_message_id": sent_room_msg.message_id
+                })
+
                 buyer_link = await context.bot.create_chat_invite_link(
                     chat_id=chat_id,
                     creates_join_request=True,
@@ -1730,6 +1765,9 @@ async def handle_join_request(update: Update,
             update_escrow(escrow_id, {"seller_joined": True})
             escrow = get_escrow(escrow_id)
             if escrow.get("seller_joined") and escrow.get("buyer_joined"):
+                await update_room_to_fee_selection(
+                    context, escrow_id, escrow
+                )
                 await update_original_message_to_vouch(
                     context, escrow_id, escrow
                 )
@@ -1741,6 +1779,9 @@ async def handle_join_request(update: Update,
             update_escrow(escrow_id, {"buyer_joined": True})
             escrow = get_escrow(escrow_id)
             if escrow.get("seller_joined") and escrow.get("buyer_joined"):
+                await update_room_to_fee_selection(
+                    context, escrow_id, escrow
+                )
                 await update_original_message_to_vouch(
                     context, escrow_id, escrow
                 )
@@ -1749,6 +1790,25 @@ async def handle_join_request(update: Update,
     else:
         try:
             await join_request.decline()
+        except Exception:
+            pass
+
+
+async def update_room_to_fee_selection(context, escrow_id, escrow):
+    room_chat_id = escrow.get("room_chat_id")
+    room_fee_msg_id = escrow.get("room_fee_message_id")
+
+    if room_chat_id and room_fee_msg_id:
+        fee_msg = build_fee_selection_message(escrow_id, escrow)
+        fee_keyboard = build_fee_selection_keyboard(escrow_id)
+        try:
+            await context.bot.edit_message_text(
+                chat_id=room_chat_id,
+                message_id=room_fee_msg_id,
+                text=fee_msg,
+                parse_mode="HTML",
+                reply_markup=fee_keyboard
+            )
         except Exception:
             pass
 
