@@ -50,8 +50,8 @@ TELETHON_API_ID = 38828234
 TELETHON_API_HASH = "99d96d08bc57f882907032a2f8f65b46"
 TELETHON_SESSION = os.environ.get("TELETHON_SESSION", "")
 
-BOT_USERNAME = "EcroweBot"
-BOT_ID = 8029678424
+BOT_USERNAME = "Elite_test_1_bot"
+BOT_ID = 8783514181
 USERBOT_ID = None
 
 state_lock = asyncio.Lock()
@@ -344,8 +344,6 @@ def build_confirmed_message(escrow_id, data):
     seller = escape_html(data["seller"])
     buyer = escape_html(data["buyer"])
     amount = data["amount"]
-    rate = data["rate"]
-    total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
     escrow_id_str = f"{escrow_id:08d}"
@@ -354,18 +352,12 @@ def build_confirmed_message(escrow_id, data):
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
-💱 <b>Rate</b>: {rate:.1f} INR/USDT
-💰 <b>Total INR</b>: ₹{total_inr:.1f}
+💵 <b>Amount</b>: {amount:.1f} USDT
+💱 <b>Rate</b>: ** INR/USDT
+💰 <b>Total INR</b>: **
 🕒 <b>Time</b>: {time_val}
 
-<b>Status</b>: Moved to private escrow room.
-
-✅<b>Private escrow room created.</b>
-Continue the escrow steps <b>inside the private room</b>.
-Use the buttons below to get your one-time join link.
-
-<b>Status</b>: Opening private escrow room..."""
+<b>Status</b>: ⏳ Creating private escrow room..."""
 
     return message
 
@@ -382,8 +374,6 @@ def build_room_ready_message(escrow_id, data):
     seller = escape_html(data["seller"])
     buyer = escape_html(data["buyer"])
     amount = data["amount"]
-    rate = data["rate"]
-    total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
     escrow_id_str = f"{escrow_id:08d}"
@@ -392,16 +382,13 @@ def build_room_ready_message(escrow_id, data):
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
-💱 <b>Rate</b>: {rate:.1f} INR/USDT
-💰 <b>Total INR</b>: ₹{total_inr:.1f}
+💵 <b>Amount</b>: {amount:.1f} USDT
+💱 <b>Rate</b>: ** INR/USDT
+💰 <b>Total INR</b>: **
 🕒 <b>Time</b>: {time_val}
 
-<b>Status</b>: Moved to private escrow room.
-
-✅<b>Private escrow room created.</b>
-Continue the escrow steps <b>inside the private room</b>.
-Use the buttons below to get your one-time join link."""
+✅ <b>Private escrow room created.</b>
+Use the private room for all actions."""
 
     return message
 
@@ -1199,7 +1186,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if both_confirmed:
             new_message = build_confirmed_message(escrow_id, escrow)
-            new_keyboard = build_opening_room_keyboard(escrow_id)
+            new_keyboard = None
 
             asyncio.create_task(create_escrow_room(escrow_id))
         else:
