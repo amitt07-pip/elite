@@ -153,55 +153,72 @@ async def init_telethon_client():
 
 
 async def create_escrow_room(escrow_id):
-    client = await init_telethon_client()
-    if not client:
+    try:
+        print(f"[ROOM] Starting room creation for escrow {escrow_id}",
+              flush=True)
+        client = await init_telethon_client()
+        if not client:
+            print("[ROOM] Telethon client init failed", flush=True)
+            return None
+
+        print("[ROOM] Telethon client connected", flush=True)
+        escrow_id_str = f"{escrow_id:08d}"
+        group_title = f"Elite Escrow Group No. {escrow_id_str}"
+
+        result = await client(CreateChannelRequest(
+            title=group_title,
+            about="",
+            megagroup=True
+        ))
+        print("[ROOM] Group created", flush=True)
+
+        channel = result.chats[0]
+        room_chat_id = telethon_utils.get_peer_id(channel)
+
+        bot_entity = await client.get_entity(BOT_USERNAME)
+        print(f"[ROOM] Bot entity resolved: {bot_entity}", flush=True)
+
+        await client(InviteToChannelRequest(
+            channel=channel,
+            users=[bot_entity]
+        ))
+        print("[ROOM] Bot invited to group", flush=True)
+
+        admin_rights = ChatAdminRights(
+            change_info=True,
+            post_messages=True,
+            edit_messages=True,
+            delete_messages=True,
+            ban_users=True,
+            invite_users=True,
+            pin_messages=True,
+            add_admins=False,
+            anonymous=False,
+            manage_call=True,
+            other=True
+        )
+
+        await client(EditAdminRequest(
+            channel=channel,
+            user_id=bot_entity,
+            admin_rights=admin_rights,
+            rank="Admin"
+        ))
+        print("[ROOM] Bot promoted to admin", flush=True)
+
+        await client(LeaveChannelRequest(channel))
+        print("[ROOM] Userbot left group", flush=True)
+
+        update_escrow(escrow_id, {"room_chat_id": room_chat_id})
+        print(f"[ROOM] Room created successfully: {room_chat_id}",
+              flush=True)
+
+        return room_chat_id
+    except Exception as e:
+        print(f"[ROOM] Error creating room: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return None
-
-    escrow_id_str = f"{escrow_id:08d}"
-    group_title = f"Elite Escrow Group No. {escrow_id_str}"
-
-    result = await client(CreateChannelRequest(
-        title=group_title,
-        about="",
-        megagroup=True
-    ))
-
-    channel = result.chats[0]
-    room_chat_id = telethon_utils.get_peer_id(channel)
-
-    bot_entity = await client.get_entity(BOT_USERNAME)
-
-    await client(InviteToChannelRequest(
-        channel=channel,
-        users=[bot_entity]
-    ))
-
-    admin_rights = ChatAdminRights(
-        change_info=True,
-        post_messages=True,
-        edit_messages=True,
-        delete_messages=True,
-        ban_users=True,
-        invite_users=True,
-        pin_messages=True,
-        add_admins=False,
-        anonymous=False,
-        manage_call=True,
-        other=True
-    )
-
-    await client(EditAdminRequest(
-        channel=channel,
-        user_id=bot_entity,
-        admin_rights=admin_rights,
-        rank="Admin"
-    ))
-
-    await client(LeaveChannelRequest(channel))
-
-    update_escrow(escrow_id, {"room_chat_id": room_chat_id})
-
-    return room_chat_id
 
 
 def parse_escrow_form(text):
@@ -610,32 +627,39 @@ async def verify_tx_on_bscscan(tx_hash, escrow_address):
 
 
 def build_deposit_message(escrow_id, data, escrow_address):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    # Escrow fees (currently free)
+    buyer_fee = 0.00
+    seller_fee = 0.00
+    total_fee = buyer_fee + seller_fee
+
     escrow_id_str = f"{escrow_id:08d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
+👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
+🏦 <b>Escrow address</b>:
+<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+🔐 <b>Verify code</b>: 08FEV4AW
+⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
-<b>Status</b>: Confirmed &amp; fees agreed.
-📥 Deposit
-Send USDT to
-<code>{escrow_address}</code>
-Then tap <b>I paid - Submit TX hash</b> below and paste your TX hash \
-(0x...)."""
+<b>Status</b>: Awaiting seller deposit."""
 
     return message
 
@@ -1391,7 +1415,7 @@ async def handle_fee_acceptance(update: Update,
             update_escrow(escrow_id, {"escrow_address": esc_addr})
             escrow["escrow_address"] = esc_addr
             new_message = build_deposit_message(escrow_id, escrow, esc_addr)
-            new_keyboard = build_deposit_keyboard(escrow_id)
+            new_keyboard = None
         else:
             new_message = build_fee_acceptance_message(
                 escrow_id,
