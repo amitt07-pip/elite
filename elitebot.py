@@ -306,13 +306,13 @@ def build_escrow_message(escrow_id, data, seller_confirmed=False,
 ━━━━━━━━━━━━━━━━━━━━
 {seller_emoji} <b>Seller</b>: {seller}
 {buyer_emoji} <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: ** INR/USDT
 💰 <b>Total INR</b>: **
 🕒 <b>Time</b>: {time_val}
 
 <b>Status</b>: Role acknowledgement required.
-⚠️ Verify roles carefully. Deposit address appears only after both acknowledge."""
+⚠︎ Verify roles carefully. Deposit address appears only after both acknowledge."""
 
     return message
 
