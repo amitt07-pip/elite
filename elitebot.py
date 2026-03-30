@@ -1690,6 +1690,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # Delete any crypto address posted in escrow room silently
+    if escrow_id and escrow:
+        addr_match = re.search(r'0x[a-fA-F0-9]{40}', text)
+        if addr_match:
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=update.message.message_id
+                )
+            except Exception:
+                pass
+            return
+
 
 def normalize_username(username):
     if not username:
