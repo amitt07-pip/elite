@@ -175,8 +175,13 @@ async def create_escrow_room(escrow_id):
         channel = result.chats[0]
         room_chat_id = telethon_utils.get_peer_id(channel)
 
+        # Save room_chat_id BEFORE inviting bot to avoid race condition
+        # (handle_new_chat_members needs this to find the escrow)
+        update_escrow(escrow_id, {"room_chat_id": room_chat_id})
+        print(f"[ROOM] Room chat ID saved: {room_chat_id}", flush=True)
+
         bot_entity = await client.get_entity(BOT_USERNAME)
-        print(f"[ROOM] Bot entity resolved: {bot_entity}", flush=True)
+        print(f"[ROOM] Bot entity resolved", flush=True)
 
         await client(InviteToChannelRequest(
             channel=channel,
@@ -229,7 +234,6 @@ async def create_escrow_room(escrow_id):
         ))
         print("[ROOM] Userbot set as anonymous admin", flush=True)
 
-        update_escrow(escrow_id, {"room_chat_id": room_chat_id})
         print(f"[ROOM] Room created successfully: {room_chat_id}",
               flush=True)
 
