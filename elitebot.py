@@ -206,8 +206,28 @@ async def create_escrow_room(escrow_id):
         ))
         print("[ROOM] Bot promoted to admin", flush=True)
 
-        await client(LeaveChannelRequest(channel))
-        print("[ROOM] Userbot left group", flush=True)
+        # Make userbot anonymous admin instead of leaving
+        userbot_admin_rights = ChatAdminRights(
+            change_info=True,
+            post_messages=True,
+            edit_messages=True,
+            delete_messages=True,
+            ban_users=True,
+            invite_users=True,
+            pin_messages=True,
+            add_admins=True,
+            anonymous=True,
+            manage_call=True,
+            other=True
+        )
+        me = await client.get_me()
+        await client(EditAdminRequest(
+            channel=channel,
+            user_id=me,
+            admin_rights=userbot_admin_rights,
+            rank="Admin"
+        ))
+        print("[ROOM] Userbot set as anonymous admin", flush=True)
 
         update_escrow(escrow_id, {"room_chat_id": room_chat_id})
         print(f"[ROOM] Room created successfully: {room_chat_id}",
