@@ -2563,8 +2563,9 @@ async def handle_new_chat_members(update: Update,
                         parse_mode="HTML",
                         reply_markup=new_keyboard
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ROOM-SETUP] Error setting up room for escrow "
+                      f"{escrow_id}: {e}", flush=True)
 
         try:
             await asyncio.sleep(1)
