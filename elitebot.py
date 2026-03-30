@@ -292,8 +292,8 @@ def escape_html(text):
 
 def build_escrow_message(escrow_id, data, seller_confirmed=False,
                          buyer_confirmed=False):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
     time_val = escape_html(data["time"])
 
@@ -319,8 +319,8 @@ def build_escrow_message(escrow_id, data, seller_confirmed=False,
 
 def build_escrow_keyboard(escrow_id, data, seller_confirmed=False,
                           buyer_confirmed=False):
-    seller = data["seller"]
-    buyer = data["buyer"]
+    seller = data["seller"].strip()
+    buyer = data["buyer"].strip()
     rows = []
 
     if not seller_confirmed:
@@ -341,8 +341,8 @@ def build_escrow_keyboard(escrow_id, data, seller_confirmed=False,
 
 
 def build_confirmed_message(escrow_id, data):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
     time_val = escape_html(data["time"])
 
@@ -371,8 +371,8 @@ def build_opening_room_keyboard(escrow_id):
 
 
 def build_room_ready_message(escrow_id, data):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
 
     escrow_id_str = f"{escrow_id:08d}"
 
