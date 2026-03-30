@@ -373,8 +373,6 @@ def build_opening_room_keyboard(escrow_id):
 def build_room_ready_message(escrow_id, data):
     seller = escape_html(data["seller"])
     buyer = escape_html(data["buyer"])
-    amount = data["amount"]
-    time_val = escape_html(data["time"])
 
     escrow_id_str = f"{escrow_id:08d}"
 
@@ -382,10 +380,6 @@ def build_room_ready_message(escrow_id, data):
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT
-💱 <b>Rate</b>: ** INR/USDT
-💰 <b>Total INR</b>: **
-🕒 <b>Time</b>: {time_val}
 
 ✅ <b>Private escrow room created.</b>
 Use the private room for all actions."""
