@@ -3598,7 +3598,7 @@ async def handle_start_command(update: Update,
         return
 
     await update.message.reply_text(
-        "Elite Escrow Bot v6 running as @EscroweBot\n"
+        "Elite Escrow Bot v6 running as @Ecrowebot\n"
         "Send /escrow for template.",
         parse_mode="HTML"
     )
