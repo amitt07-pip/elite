@@ -1313,6 +1313,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # Delete the filled form message
+        try:
+            await context.bot.delete_message(
+                chat_id=update.message.chat_id,
+                message_id=update.message.message_id
+            )
+        except Exception:
+            pass
+
         escrow_id = get_next_escrow_id()
         escrow_message = build_escrow_message(escrow_id, validated)
         keyboard = build_escrow_keyboard(escrow_id, validated)
@@ -1690,6 +1699,10 @@ def normalize_username(username):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+
+    if query.data.startswith("noop:"):
+        await query.answer()
+        return
 
     if query.data.startswith("fee:"):
         await handle_fee_selection(update, context)
@@ -2465,13 +2478,20 @@ async def handle_release_final(update: Update,
 
             # Step 1: Processing on-chain
             processing_msg = build_processing_message(escrow_id, escrow)
+            processing_kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    "⏳ Processing on-chain…",
+                    callback_data=f"noop:{escrow_id}"
+                )
+            ]])
             if fee_msg_id:
                 try:
                     await context.bot.edit_message_text(
                         chat_id=room_chat_id,
                         message_id=fee_msg_id,
                         text=processing_msg,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_markup=processing_kb
                     )
                 except Exception:
                     pass
@@ -2490,7 +2510,8 @@ async def handle_release_final(update: Update,
                         chat_id=room_chat_id,
                         message_id=fee_msg_id,
                         text=closed_msg,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_markup=processing_kb
                     )
                 except Exception:
                     pass
@@ -2635,13 +2656,20 @@ async def handle_refund_final(update: Update,
 
             # Step 1: Processing on-chain
             processing_msg = build_processing_message(escrow_id, escrow)
+            processing_kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    "⏳ Processing on-chain…",
+                    callback_data=f"noop:{escrow_id}"
+                )
+            ]])
             if fee_msg_id:
                 try:
                     await context.bot.edit_message_text(
                         chat_id=room_chat_id,
                         message_id=fee_msg_id,
                         text=processing_msg,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_markup=processing_kb
                     )
                 except Exception:
                     pass
@@ -2660,7 +2688,8 @@ async def handle_refund_final(update: Update,
                         chat_id=room_chat_id,
                         message_id=fee_msg_id,
                         text=closed_msg,
-                        parse_mode="HTML"
+                        parse_mode="HTML",
+                        reply_markup=processing_kb
                     )
                 except Exception:
                     pass
@@ -2869,6 +2898,16 @@ async def handle_new_chat_members(update: Update,
                     parse_mode="HTML",
                     reply_markup=room_keyboard
                 )
+
+                # Pin the main message
+                try:
+                    await context.bot.pin_chat_message(
+                        chat_id=chat_id,
+                        message_id=sent_room_msg.message_id,
+                        disable_notification=True
+                    )
+                except Exception:
+                    pass
 
                 update_escrow(escrow_id, {
                     "room_fee_message_id": sent_room_msg.message_id
