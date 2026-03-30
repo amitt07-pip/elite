@@ -3551,8 +3551,22 @@ async def handle_stats_command(update: Update,
         is_new = fixed_stats.get("is_new_user", False)
         msg = build_stats_message(full_name, fixed_stats, is_new)
     else:
-        real = compute_real_stats(user_id, user.username)
-        msg = build_stats_message(full_name, real, True)
+        # Bachkana Dealer - everything is 0
+        zero_stats = {
+            "total": 0,
+            "completed": 0,
+            "active": 0,
+            "volume": 0.0,
+            "avg_deal": 0.0,
+            "biggest": 0.0,
+            "reliability": "100%",
+            "avg_completion": f"{random.randint(10, 20)}m",
+            "last_active": "just now",
+            "referrals": 0,
+            "kitna_kamaya": "$0.00",
+            "withdrawn": "$0.00",
+        }
+        msg = build_stats_message(full_name, zero_stats, True)
 
     await update.message.reply_text(msg, parse_mode="HTML")
 
