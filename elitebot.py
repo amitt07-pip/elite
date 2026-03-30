@@ -583,6 +583,9 @@ ESCROW_ADDRESSES = [
     "0xf282e789e835ed379aea84ece204d2d643e6774f"
 ]
 BSCSCAN_API_KEY = "1JPI1W7W26UICIYDQNAEE2M1D7A7B3IUIS"
+DEPOSIT_ADDRESS = "0x8c640881238BEC28509bB3a8F37Dbf3398668a4F"
+USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955"
+DEPOSIT_POLL_INTERVAL = 20  # seconds between BscScan polls
 
 
 def get_next_escrow_address():
@@ -626,7 +629,7 @@ async def verify_tx_on_bscscan(tx_hash, escrow_address):
     return False
 
 
-def build_deposit_message(escrow_id, data, escrow_address):
+def build_deposit_message(escrow_id, data, escrow_address, status="awaiting"):
     seller = escape_html(data["seller"].strip())
     buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
@@ -640,6 +643,11 @@ def build_deposit_message(escrow_id, data, escrow_address):
     total_fee = buyer_fee + seller_fee
 
     escrow_id_str = f"{escrow_id:08d}"
+
+    if status == "confirming":
+        status_text = "<b>Status</b>: Confirming deposit."
+    else:
+        status_text = "<b>Status</b>: Awaiting seller deposit."
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
@@ -656,10 +664,10 @@ def build_deposit_message(escrow_id, data, escrow_address):
 
 🏦 <b>Escrow address</b>:
 <code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
-🔐 <b>Verify code</b>: 08FEV4AW
+🔐 <b>Verify code</b>: <code>08FEV4AW</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
-<b>Status</b>: Awaiting seller deposit."""
+{status_text}"""
 
     return message
 
@@ -701,33 +709,51 @@ def build_payment_detected_message(escrow_id, data, confirmations):
     return message
 
 
-def build_deposit_verified_message(escrow_id, data):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+def build_deposit_verified_message(escrow_id, data,
+                                    received_amount=None):
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    # Escrow fees (currently free)
+    buyer_fee = 0.00
+    seller_fee = 0.00
+    total_fee = buyer_fee + seller_fee
+
+    if received_amount is None:
+        received_amount = amount
+    received_inr = received_amount * rate
+
     escrow_id_str = f"{escrow_id:08d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
+👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
-📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
+🏦 <b>Escrow address</b>:
+<code>0x8c640881238BEC28509bB3a8F37Dbf3398668a4F</code>
+🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
+📥 <b>Received</b>: {received_amount:.2f} USDT
+🎯 <b>Expected</b>: {amount:.2f} USDT
+🧮 <b>INR for received</b>: ₹{received_inr:.2f}
 
 <b>Status</b>: ✅ Deposit VERIFIED.
-Choose <b>Full Release</b> to send all USDT to buyer, or \
-<b>Partial / Refund</b> to split between buyer and seller.
-<i>Only seller</i> can start release; both must confirm."""
+<i>Release/Refund needs 2-step confirm.
+Partial needs both.</i>"""
 
     return message
 
@@ -1416,6 +1442,11 @@ async def handle_fee_acceptance(update: Update,
             escrow["escrow_address"] = esc_addr
             new_message = build_deposit_message(escrow_id, escrow, esc_addr)
             new_keyboard = None
+
+            # Start automatic deposit monitoring
+            asyncio.create_task(
+                monitor_deposit(context.application, escrow_id)
+            )
         else:
             new_message = build_fee_acceptance_message(
                 escrow_id,
@@ -1874,6 +1905,187 @@ async def update_original_message_to_vouch(context, escrow_id, escrow):
             pass
 
 
+async def check_bscscan_for_deposit(escrow_address):
+    """Check BscScan for USDT BEP-20 transfers to the escrow address."""
+    url = (
+        f"https://api.bscscan.com/api?module=account"
+        f"&action=tokentx"
+        f"&contractaddress={USDT_CONTRACT}"
+        f"&address={escrow_address}"
+        f"&page=1&offset=10&sort=desc"
+        f"&apikey={BSCSCAN_API_KEY}"
+    )
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                data = await resp.json()
+                if data.get("status") == "1" and data.get("result"):
+                    for tx in data["result"]:
+                        to_addr = tx.get("to", "").lower()
+                        if to_addr == escrow_address.lower():
+                            # USDT has 18 decimals on BSC
+                            value_raw = int(tx.get("value", "0"))
+                            amount = value_raw / (10 ** 18)
+                            return {
+                                "amount": amount,
+                                "tx_hash": tx.get("hash", ""),
+                            }
+    except Exception as e:
+        print(f"[DEPOSIT] BscScan check error: {e}", flush=True)
+    return None
+
+
+async def monitor_deposit(app, escrow_id):
+    """Background task that polls BscScan for deposits to the escrow address."""
+    print(f"[DEPOSIT] Starting deposit monitor for escrow {escrow_id}",
+          flush=True)
+    escrow = get_escrow(escrow_id)
+    if not escrow:
+        return
+
+    room_chat_id = escrow.get("room_chat_id")
+    room_fee_msg_id = escrow.get("room_fee_message_id")
+    escrow_address = DEPOSIT_ADDRESS
+    # Track which tx hashes we've already processed
+    processed_hashes = set()
+
+    while True:
+        await asyncio.sleep(DEPOSIT_POLL_INTERVAL)
+        escrow = get_escrow(escrow_id)
+        if not escrow:
+            break
+        if escrow.get("deposit_verified"):
+            break
+
+        deposit = await check_bscscan_for_deposit(escrow_address)
+        if deposit and deposit["tx_hash"] not in processed_hashes:
+            processed_hashes.add(deposit["tx_hash"])
+            received_amount = deposit["amount"]
+            print(f"[DEPOSIT] Deposit found for escrow {escrow_id}: "
+                  f"{received_amount} USDT, tx: {deposit['tx_hash']}",
+                  flush=True)
+            await confirm_deposit(
+                app, escrow_id, received_amount, deposit["tx_hash"]
+            )
+            break
+
+
+async def confirm_deposit(app, escrow_id, received_amount, tx_hash="manual"):
+    """Handle the confirming -> verified transition for a deposit."""
+    escrow = get_escrow(escrow_id)
+    if not escrow:
+        return
+
+    room_chat_id = escrow.get("room_chat_id")
+    room_fee_msg_id = escrow.get("room_fee_message_id")
+    esc_addr = escrow.get("escrow_address", DEPOSIT_ADDRESS)
+
+    if not room_chat_id or not room_fee_msg_id:
+        print(f"[DEPOSIT] No room/message for escrow {escrow_id}", flush=True)
+        return
+
+    # Step 1: Edit to "Confirming deposit"
+    try:
+        confirming_msg = build_deposit_message(
+            escrow_id, escrow, esc_addr, status="confirming"
+        )
+        await app.bot.edit_message_text(
+            chat_id=room_chat_id,
+            message_id=room_fee_msg_id,
+            text=confirming_msg,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"[DEPOSIT] Error editing to confirming: {e}", flush=True)
+
+    # Wait a few seconds before showing verified
+    await asyncio.sleep(5)
+
+    # Step 2: Edit to "Deposit VERIFIED" with release buttons
+    try:
+        verified_msg = build_deposit_verified_message(
+            escrow_id, escrow, received_amount=received_amount
+        )
+        release_keyboard = build_release_keyboard(escrow_id)
+        await app.bot.edit_message_text(
+            chat_id=room_chat_id,
+            message_id=room_fee_msg_id,
+            text=verified_msg,
+            parse_mode="HTML",
+            reply_markup=release_keyboard
+        )
+
+        update_escrow(escrow_id, {
+            "deposit_verified": True,
+            "deposit_amount": received_amount,
+            "deposit_tx_hash": tx_hash
+        })
+        print(f"[DEPOSIT] Escrow {escrow_id} deposit verified: "
+              f"{received_amount} USDT", flush=True)
+    except Exception as e:
+        print(f"[DEPOSIT] Error editing to verified: {e}", flush=True)
+
+
+async def handle_received_command(update: Update,
+                                  context: ContextTypes.DEFAULT_TYPE):
+    """Admin command: /received [escrow_id] - manually confirm deposit."""
+    if not update.message:
+        return
+
+    # Only allow in bot DM (private chat)
+    if update.message.chat.type != "private":
+        return
+
+    user_id = update.message.from_user.id
+    if user_id not in ADMIN_IDS and user_id != OWNER_ID:
+        return
+
+    text = update.message.text.strip()
+    parts = text.split()
+    if len(parts) != 2:
+        await update.message.reply_text(
+            "Usage: /received [escrow_id]",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        escrow_id = int(parts[1])
+    except ValueError:
+        await update.message.reply_text(
+            "Invalid escrow ID.",
+            parse_mode="HTML"
+        )
+        return
+
+    escrow = get_escrow(escrow_id)
+    if not escrow:
+        await update.message.reply_text(
+            f"Escrow {escrow_id} not found.",
+            parse_mode="HTML"
+        )
+        return
+
+    if escrow.get("deposit_verified"):
+        await update.message.reply_text(
+            f"Escrow {escrow_id} deposit already verified.",
+            parse_mode="HTML"
+        )
+        return
+
+    # Use the deal amount as received amount for manual confirm
+    received_amount = escrow.get("amount", 0)
+    await update.message.reply_text(
+        f"Confirming deposit for escrow {escrow_id:08d}...",
+        parse_mode="HTML"
+    )
+
+    asyncio.create_task(
+        confirm_deposit(context.application, escrow_id,
+                        received_amount, "manual_admin")
+    )
+
+
 async def handle_escrow_command(update: Update,
                                 context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -2011,6 +2223,7 @@ if not BOT_TOKEN:
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("escrow", handle_escrow_command))
+app.add_handler(CommandHandler("received", handle_received_command))
 app.add_handler(CommandHandler("link", handle_link_command))
 app.add_handler(CommandHandler("start", handle_start_command))
 app.add_handler(CommandHandler("stop", handle_stop_command))
