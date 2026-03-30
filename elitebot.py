@@ -1916,6 +1916,73 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_keyboard = None
 
             asyncio.create_task(create_escrow_room(escrow_id))
+
+            # Send stats check messages
+            chat_id = query.message.chat_id
+            seller_un = escrow.get("seller", "").strip().lstrip("@")
+            buyer_un = escrow.get("buyer", "").strip().lstrip("@")
+            seller_uid = escrow.get("seller_user_id")
+            buyer_uid = escrow.get("buyer_user_id")
+
+            # Seller stats for buyer
+            seller_fixed = get_user_stats(seller_uid) if seller_uid \
+                else None
+            if not seller_fixed and seller_un:
+                seller_fixed = get_user_stats(f"@{seller_un}")
+            if seller_fixed:
+                s_title = "💼 Proper Dealer" if not seller_fixed.get(
+                    "is_new_user", True) else "🍼 Bachkana Dealer"
+                s_total = seller_fixed.get("total", 0)
+                s_completed = seller_fixed.get("completed", 0)
+                s_name = seller_un or "Seller"
+            else:
+                s_title = "🍼 Bachkana Dealer"
+                s_total = 0
+                s_completed = 0
+                s_name = seller_un or "Seller"
+
+            buyer_stats_msg = (
+                f"Hi @{escape_html(buyer_un)}, your Seller "
+                f"@{escape_html(seller_un)} stats check before "
+                f"proceeding\n\n"
+                f"{s_title}\n\n"
+                f"Name: {escape_html(s_name)}\n"
+                f"Completed: {s_completed} / {s_total}"
+            )
+            await context.bot.send_message(
+                chat_id=chat_id, text=buyer_stats_msg,
+                parse_mode="HTML"
+            )
+
+            # Buyer stats for seller
+            buyer_fixed = get_user_stats(buyer_uid) if buyer_uid \
+                else None
+            if not buyer_fixed and buyer_un:
+                buyer_fixed = get_user_stats(f"@{buyer_un}")
+            if buyer_fixed:
+                b_title = "💼 Proper Dealer" if not buyer_fixed.get(
+                    "is_new_user", True) else "🍼 Bachkana Dealer"
+                b_total = buyer_fixed.get("total", 0)
+                b_completed = buyer_fixed.get("completed", 0)
+                b_name = buyer_un or "Buyer"
+            else:
+                b_title = "🍼 Bachkana Dealer"
+                b_total = 0
+                b_completed = 0
+                b_name = buyer_un or "Buyer"
+
+            seller_stats_msg = (
+                f"Hi @{escape_html(seller_un)}, your Buyer "
+                f"@{escape_html(buyer_un)} stats check before "
+                f"proceeding\n\n"
+                f"{b_title}\n\n"
+                f"Name: {escape_html(b_name)}\n"
+                f"Completed: {b_completed} / {b_total}"
+            )
+            await context.bot.send_message(
+                chat_id=chat_id, text=seller_stats_msg,
+                parse_mode="HTML"
+            )
         else:
             new_message = build_escrow_message(
                 escrow_id,
