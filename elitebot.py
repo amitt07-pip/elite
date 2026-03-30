@@ -499,14 +499,29 @@ def build_fee_selection_keyboard(escrow_id):
 
 def build_fee_acceptance_message(escrow_id, data, seller_accepted=False,
                                  buyer_accepted=False):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
+    seller = escape_html(data["seller"].strip())
+    buyer = escape_html(data["buyer"].strip())
     amount = data["amount"]
     rate = data["rate"]
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    # Escrow fees (currently free)
+    buyer_fee = 0.00
+    seller_fee = 0.00
+    total_fee = buyer_fee + seller_fee
+
     escrow_id_str = f"{escrow_id:08d}"
+
+    fee_mode = data.get("fee_mode", "")
+    if fee_mode == "split":
+        fee_mode_label = "SPLIT"
+    elif fee_mode == "seller_pays":
+        fee_mode_label = "Seller"
+    elif fee_mode == "buyer_pays":
+        fee_mode_label = "Buyer"
+    else:
+        fee_mode_label = fee_mode
 
     seller_emoji = "✅" if seller_accepted else "⏳"
     buyer_emoji = "✅" if buyer_accepted else "⏳"
@@ -515,39 +530,35 @@ def build_fee_acceptance_message(escrow_id, data, seller_accepted=False,
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
+<b>Status</b>: Fee mode selected: <b>{fee_mode_label}</b>. Both parties must confirm to start escrow creation.
+💸 Total fee: <code>{total_fee:.2f}</code> USDT (non-refundable)
 
-<b>Status</b>: Fee mode selected.
-{seller_emoji}Seller fee agreement
-{buyer_emoji}Buyer fee agreement
-<b>Note</b>: Once both accept, deposit instructions will appear.
-<b>Important</b>: Even if INR side fails/ cancels, platform may still \
-charge fees as agreed off-chain."""
+{buyer_emoji} <b>Buyer fee confirm</b>: {buyer} | {seller_emoji} <b>Seller fee confirm</b>: {seller}"""
 
     return message
 
 
 def build_fee_acceptance_keyboard(escrow_id):
-    seller_accepts = InlineKeyboardButton(
-        "✅ Seller accepts...",
-        callback_data=f"feeaccept:{escrow_id}:seller"
-    )
-    buyer_accepts = InlineKeyboardButton(
-        "✅ Buyer accepts...",
-        callback_data=f"feeaccept:{escrow_id}:buyer"
-    )
     change_fees = InlineKeyboardButton(
-        "↩️Change fees",
+        "♻️ Change fee mode",
         callback_data=f"feeaccept:{escrow_id}:change"
     )
+    buyer_confirms = InlineKeyboardButton(
+        "✅ Buyer confirm",
+        callback_data=f"feeaccept:{escrow_id}:buyer"
+    )
+    seller_confirms = InlineKeyboardButton(
+        "✅ Seller confirm",
+        callback_data=f"feeaccept:{escrow_id}:seller"
+    )
     return InlineKeyboardMarkup([
-        [seller_accepts, buyer_accepts],
-        [change_fees]
+        [change_fees],
+        [buyer_confirms, seller_confirms]
     ])
 
 
