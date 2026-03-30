@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import re
 import aiohttp
 
@@ -45,6 +46,7 @@ Time:</code>
 
 STATE_FILE = "escrow_state.json"
 ESCROWS_FILE = "escrows.json"
+USER_STATS_FILE = "user_stats.json"
 
 TELETHON_API_ID = 38828234
 TELETHON_API_HASH = "99d96d08bc57f882907032a2f8f65b46"
@@ -136,6 +138,81 @@ def get_escrow_by_room_chat_id(room_chat_id):
         if data.get("room_chat_id") == room_chat_id:
             return int(eid), data
     return None, None
+
+
+def load_user_stats():
+    if os.path.exists(USER_STATS_FILE):
+        with open(USER_STATS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_user_stats(stats):
+    with open(USER_STATS_FILE, "w") as f:
+        json.dump(stats, f)
+
+
+def get_user_stats(user_id):
+    stats = load_user_stats()
+    return stats.get(str(user_id))
+
+
+def set_user_stats(user_id, data):
+    stats = load_user_stats()
+    stats[str(user_id)] = data
+    save_user_stats(stats)
+
+
+def compute_real_stats(user_id, username):
+    """Compute stats from actual escrow deals for a user."""
+    escrows = load_escrows()
+    if username:
+        uname = username.lower().lstrip("@")
+    else:
+        uname = None
+
+    total = 0
+    completed = 0
+    active = 0
+    volume = 0.0
+    biggest = 0.0
+
+    for eid, data in escrows.items():
+        seller_un = (data.get("seller") or "").strip().lstrip("@").lower()
+        buyer_un = (data.get("buyer") or "").strip().lstrip("@").lower()
+        seller_uid = data.get("seller_user_id")
+        buyer_uid = data.get("buyer_user_id")
+
+        involved = False
+        if seller_uid == user_id or buyer_uid == user_id:
+            involved = True
+        elif uname and (seller_un == uname or buyer_un == uname):
+            involved = True
+
+        if not involved:
+            continue
+
+        total += 1
+        amount = data.get("amount", 0)
+        volume += amount
+        if amount > biggest:
+            biggest = amount
+
+        if data.get("released") or data.get("release_phase") == "completed" \
+                or data.get("refund_phase") == "completed":
+            completed += 1
+        else:
+            active += 1
+
+    avg_deal = volume / total if total > 0 else 0.0
+    return {
+        "total": total,
+        "completed": completed,
+        "active": active,
+        "volume": volume,
+        "avg_deal": avg_deal,
+        "biggest": biggest,
+    }
 
 
 async def init_telethon_client():
@@ -1715,6 +1792,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data.startswith("noop:"):
         await query.answer()
+        return
+
+    if query.data.startswith("increase:"):
+        await handle_increase_callback(update, context)
         return
 
     if query.data.startswith("fee:"):
@@ -3409,6 +3490,208 @@ async def handle_status_command(update: Update,
     )
 
 
+def build_stats_message(full_name, stats_data, is_new_user):
+    """Build the stats message for a user."""
+    total = stats_data.get("total", 0)
+    completed = stats_data.get("completed", 0)
+    active_val = stats_data.get("active", 0)
+    volume = stats_data.get("volume", 0.0)
+    avg_deal = stats_data.get("avg_deal", 0.0)
+    biggest = stats_data.get("biggest", 0.0)
+    reliability = stats_data.get("reliability", "100%")
+    avg_completion = stats_data.get("avg_completion", f"{random.randint(10, 20)}m")
+    last_active = stats_data.get("last_active", "just now")
+    referrals = stats_data.get("referrals", 0)
+    kitna_kamaya = stats_data.get("kitna_kamaya", "$0.00")
+    withdrawn = stats_data.get("withdrawn", "$0.00")
+
+    if is_new_user:
+        title = "🍼 Bachkana Dealer"
+    else:
+        title = "💼 Proper Dealer"
+
+    msg = f"""{title}
+
+Name: <b>{escape_html(full_name)}</b>
+
+🧾 Total Escrows: {total}
+✅ Completed: {completed}
+🟡 Active: {active_val}
+💸 Volume: ${volume:.2f}
+📊 Avg Deal Size: ${avg_deal:.2f}
+🥇 Biggest Deal: ${biggest:.2f}
+📈 Reliability: {reliability}
+🕒 Avg Deal Completion: {avg_completion}
+⏱ Last Active: {last_active}
+👥 Referrals: {referrals}
+💰 Kitna Kamaya: {kitna_kamaya}
+🏧 Withdrawn: {withdrawn}"""
+
+    if is_new_user:
+        msg += "\n\n🔴 New User – Proceed with caution"
+
+    return msg
+
+
+async def handle_stats_command(update: Update,
+                               context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    user = update.message.from_user
+    user_id = user.id
+    full_name = user.full_name or "Unknown"
+
+    # Check if user has fixed stats (from /increase) by user_id or @username
+    fixed_stats = get_user_stats(user_id)
+    if not fixed_stats and user.username:
+        fixed_stats = get_user_stats(f"@{user.username}")
+
+    if fixed_stats:
+        is_new = fixed_stats.get("is_new_user", False)
+        msg = build_stats_message(full_name, fixed_stats, is_new)
+    else:
+        real = compute_real_stats(user_id, user.username)
+        msg = build_stats_message(full_name, real, True)
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+
+async def handle_increase_command(update: Update,
+                                  context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    user_id = update.message.from_user.id
+    if user_id not in ADMIN_IDS:
+        return
+
+    args = context.args or []
+
+    if len(args) == 0:
+        # Increase for self
+        target_user_id = user_id
+        target_display = "yourself"
+    else:
+        target = args[0]
+        if target.startswith("@"):
+            # Username - we'll store by username temporarily
+            target_display = target
+            target_user_id = target  # store as string @username
+        else:
+            try:
+                target_user_id = int(target)
+                target_display = str(target_user_id)
+            except ValueError:
+                await update.message.reply_text(
+                    "Usage: /increase or /increase @username or "
+                    "/increase user_id"
+                )
+                return
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(
+            "🍼 Bachkana Dealer",
+            callback_data=f"increase:bachkana:{target_user_id}"
+        )],
+        [InlineKeyboardButton(
+            "💼 Proper Dealer",
+            callback_data=f"increase:proper:{target_user_id}"
+        )]
+    ])
+
+    await update.message.reply_text(
+        f"Choose stats level for <b>{escape_html(str(target_display))}</b>:",
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+
+async def handle_increase_callback(update: Update,
+                                   context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    if user_id not in ADMIN_IDS:
+        await query.answer("Admin only.", show_alert=True)
+        return
+
+    parts = query.data.split(":")
+    if len(parts) < 3:
+        await query.answer("Invalid data")
+        return
+
+    level = parts[1]
+    target = ":".join(parts[2:])  # rejoin in case of negative IDs
+
+    if level == "bachkana":
+        # Reset to new user (remove fixed stats)
+        if target.startswith("@"):
+            # Can't resolve user ID from username easily,
+            # store by username
+            set_user_stats(target, None)
+        else:
+            try:
+                tid = int(target)
+                all_stats = load_user_stats()
+                if str(tid) in all_stats:
+                    del all_stats[str(tid)]
+                    save_user_stats(all_stats)
+            except ValueError:
+                all_stats = load_user_stats()
+                if target in all_stats:
+                    del all_stats[target]
+                    save_user_stats(all_stats)
+
+        await query.edit_message_text(
+            f"✅ Reset to 🍼 Bachkana Dealer for "
+            f"<b>{escape_html(str(target))}</b>",
+            parse_mode="HTML"
+        )
+        await query.answer("Done")
+        return
+
+    elif level == "proper":
+        total_escrows = random.randint(30, 50)
+        completed = int(total_escrows * 0.9)
+        active_val = random.choice([0, 1])
+        volume = round(random.uniform(2000.00, 2700.00), 2)
+        avg_deal = round(volume / total_escrows, 2)
+
+        fixed = {
+            "total": total_escrows,
+            "completed": completed,
+            "active": active_val,
+            "volume": volume,
+            "avg_deal": avg_deal,
+            "biggest": 500.00,
+            "reliability": "100%",
+            "avg_completion": "15m",
+            "last_active": "just now",
+            "referrals": 0,
+            "kitna_kamaya": "$0.00",
+            "withdrawn": "$0.00",
+            "is_new_user": False,
+        }
+
+        if target.startswith("@"):
+            set_user_stats(target, fixed)
+        else:
+            try:
+                tid = int(target)
+                set_user_stats(tid, fixed)
+            except ValueError:
+                set_user_stats(target, fixed)
+
+        await query.edit_message_text(
+            f"✅ Upgraded to 💼 Proper Dealer for "
+            f"<b>{escape_html(str(target))}</b>",
+            parse_mode="HTML"
+        )
+        await query.answer("Done")
+        return
+
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable is required")
@@ -3421,6 +3704,8 @@ app.add_handler(CommandHandler("link", handle_link_command))
 app.add_handler(CommandHandler("start", handle_start_command))
 app.add_handler(CommandHandler("stop", handle_stop_command))
 app.add_handler(CommandHandler("status", handle_status_command))
+app.add_handler(CommandHandler("stats", handle_stats_command))
+app.add_handler(CommandHandler("increase", handle_increase_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
