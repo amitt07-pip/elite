@@ -295,8 +295,6 @@ def build_escrow_message(escrow_id, data, seller_confirmed=False,
     seller = escape_html(data["seller"])
     buyer = escape_html(data["buyer"])
     amount = data["amount"]
-    rate = data["rate"]
-    total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
     escrow_id_str = f"{escrow_id:08d}"
@@ -304,48 +302,41 @@ def build_escrow_message(escrow_id, data, seller_confirmed=False,
     seller_emoji = "✅" if seller_confirmed else "⏳"
     buyer_emoji = "✅" if buyer_confirmed else "⏳"
 
-    seller_note = f"Only {seller} can press Seller Confirm;"
-    buyer_note = f"only {buyer} can press Buyer Confirm."
-
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 {seller_emoji} <b>Seller</b>: {seller}
 {buyer_emoji} <b>Buyer</b>: {buyer}
 💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
-💱 <b>Rate</b>: {rate:.1f} INR/USDT
-💰 <b>Total INR</b>: ₹{total_inr:.1f}
+💱 <b>Rate</b>: ** INR/USDT
+💰 <b>Total INR</b>: **
 🕒 <b>Time</b>: {time_val}
 
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
-
-<b>Status</b>: Waiting for both confirmations.
-<i>{seller_note} {buyer_note}</i>"""
+<b>Status</b>: Role acknowledgement required.
+⚠️ Verify roles carefully. Deposit address appears only after both acknowledge."""
 
     return message
 
 
-def build_escrow_keyboard(escrow_id, seller_confirmed=False,
+def build_escrow_keyboard(escrow_id, data, seller_confirmed=False,
                           buyer_confirmed=False):
-    buttons = []
+    seller = data["seller"]
+    buyer = data["buyer"]
+    rows = []
 
     if not seller_confirmed:
-        buttons.append(
-            InlineKeyboardButton(
-                "✅ Seller Confirm",
-                callback_data=f"escrow:{escrow_id}:seller"
-            )
-        )
+        rows.append([InlineKeyboardButton(
+            f"✅ I am Seller {seller}",
+            callback_data=f"escrow:{escrow_id}:seller"
+        )])
 
     if not buyer_confirmed:
-        buttons.append(
-            InlineKeyboardButton(
-                "✅ Buyer Confirm",
-                callback_data=f"escrow:{escrow_id}:buyer"
-            )
-        )
+        rows.append([InlineKeyboardButton(
+            f"✅ I am Buyer {buyer}",
+            callback_data=f"escrow:{escrow_id}:buyer"
+        )])
 
-    if buttons:
-        return InlineKeyboardMarkup([buttons])
+    if rows:
+        return InlineKeyboardMarkup(rows)
     return None
 
 
@@ -899,22 +890,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        creating_msg = await context.bot.send_message(
-            chat_id=update.message.chat_id,
-            text="<i>Creating escrow ....</i>",
-            parse_mode="HTML"
-        )
-
-        await asyncio.sleep(1)
-
-        await context.bot.delete_message(
-            chat_id=update.message.chat_id,
-            message_id=creating_msg.message_id
-        )
-
         escrow_id = get_next_escrow_id()
         escrow_message = build_escrow_message(escrow_id, validated)
-        keyboard = build_escrow_keyboard(escrow_id)
+        keyboard = build_escrow_keyboard(escrow_id, validated)
 
         sent_msg = await context.bot.send_message(
             chat_id=update.message.chat_id,
@@ -1233,6 +1211,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             new_keyboard = build_escrow_keyboard(
                 escrow_id,
+                escrow,
                 seller_confirmed=escrow["seller_confirmed"],
                 buyer_confirmed=escrow["buyer_confirmed"]
             )
