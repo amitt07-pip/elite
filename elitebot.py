@@ -380,7 +380,6 @@ def build_room_ready_message(escrow_id, data):
 ━━━━━━━━━━━━━━━━━━━━
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-
 ✅ <b>Private escrow room created.</b>
 Use the private room for all actions."""
 
@@ -1827,10 +1826,17 @@ async def update_room_to_fee_selection(context, escrow_id, escrow):
 async def update_original_message_to_vouch(context, escrow_id, escrow):
     original_chat_id = escrow.get("chat_id")
     original_message_id = escrow.get("message_id")
+    buyer_invite = escrow.get("buyer_invite")
+    seller_invite = escrow.get("seller_invite")
 
     if original_chat_id and original_message_id:
         new_message = build_room_ready_message(escrow_id, escrow)
-        new_keyboard = build_vouch_keyboard(escrow_id)
+        if buyer_invite and seller_invite:
+            new_keyboard = build_join_buttons_keyboard(
+                buyer_invite, seller_invite
+            )
+        else:
+            new_keyboard = build_vouch_keyboard(escrow_id)
 
         try:
             await context.bot.edit_message_text(
