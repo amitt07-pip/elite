@@ -389,14 +389,22 @@ Use the private room for all actions."""
 
 def build_join_buttons_keyboard(buyer_invite, seller_invite):
     buyer_button = InlineKeyboardButton(
-        "🚪 Buyer: Join private escrow group",
+        "👤 Buyer • Join Escrow Room",
         url=buyer_invite
     )
     seller_button = InlineKeyboardButton(
-        "🚪 Seller: Join private escrow group",
+        "👤 Seller • Join Escrow Room",
         url=seller_invite
     )
-    return InlineKeyboardMarkup([[buyer_button], [seller_button]])
+    vouch_button = InlineKeyboardButton(
+        "Vouch",
+        url="https://t.me/c/2211372853/5?thread=4"
+    )
+    return InlineKeyboardMarkup([
+        [buyer_button],
+        [seller_button],
+        [vouch_button]
+    ])
 
 
 def build_vouch_keyboard(escrow_id):
