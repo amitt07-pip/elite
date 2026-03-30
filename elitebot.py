@@ -35,15 +35,12 @@ ADMIN_IDS = [
 
 OWNER_ID = 7338429782
 
-ESCROW_TEXT = """🛡 *Private Escrow Form*
-_Copy, fill and send in the group\\.
-Only deals with @usernames mentioned will be accepted \\(anti\\-scam\\)\\._
-
-`Seller: @
+ESCROW_TEXT = """<b>🛡 Escrow Form</b>
+<code>Seller: @
 Buyer: @
-Amount[USDT]:
-Rate:
-Time:`
+Amount[USDT]: 
+Rate: 
+Time:</code>
 """
 
 STATE_FILE = "escrow_state.json"
@@ -885,14 +882,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.strip()
-
-    if text.lower() == "dd":
-        await context.bot.send_message(
-            chat_id=update.message.chat_id,
-            text=ESCROW_TEXT,
-            parse_mode="MarkdownV2"
-        )
-        return
 
     if is_filled_escrow_form(text):
         sender_username = None
@@ -1816,6 +1805,18 @@ async def update_original_message_to_vouch(context, escrow_id, escrow):
             pass
 
 
+async def handle_escrow_command(update: Update,
+                                context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+
+    await context.bot.send_message(
+        chat_id=update.message.chat_id,
+        text=ESCROW_TEXT,
+        parse_mode="HTML"
+    )
+
+
 async def handle_link_command(update: Update,
                               context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1940,6 +1941,7 @@ if not BOT_TOKEN:
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+app.add_handler(CommandHandler("escrow", handle_escrow_command))
 app.add_handler(CommandHandler("link", handle_link_command))
 app.add_handler(CommandHandler("start", handle_start_command))
 app.add_handler(CommandHandler("stop", handle_stop_command))
