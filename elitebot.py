@@ -38,6 +38,11 @@ ADMIN_IDS = [
 
 OWNER_ID = 7338429782
 
+ALLOWED_GROUP_IDS = [
+    -1003451490827,  # Primary group
+    -1003450478165,  # Backup group
+]
+
 ESCROW_TEXT = """<b>🛡 Escrow Form</b>
 <code>Seller: @
 Buyer: @
@@ -1509,6 +1514,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if update.message.chat.type not in ("group", "supergroup"):
+        return
+
+    # Only respond in allowed groups or escrow rooms
+    chat_id = update.message.chat_id
+    escrow_room = get_escrow_by_room_chat_id(chat_id)
+    if chat_id not in ALLOWED_GROUP_IDS and not escrow_room[0]:
         return
 
     if not update.message.text:
@@ -3187,7 +3198,21 @@ async def handle_new_chat_members(update: Update,
     bot_was_added = any(m.id == BOT_ID for m in new_members)
 
     if bot_was_added:
+        # Check if this is an allowed group or escrow room
         escrow_id, escrow = get_escrow_by_room_chat_id(chat_id)
+        is_escrow_room = escrow_id is not None
+        is_allowed = chat_id in ALLOWED_GROUP_IDS or is_escrow_room
+
+        if not is_allowed:
+            print(f"[AUTO-LEAVE] Leaving unauthorized group {chat_id}",
+                  flush=True)
+            try:
+                await context.bot.leave_chat(chat_id)
+            except Exception as e:
+                print(f"[AUTO-LEAVE] Failed to leave {chat_id}: {e}",
+                      flush=True)
+            return
+
         if escrow_id:
             try:
                 # Wait for admin promotion (happens shortly after
