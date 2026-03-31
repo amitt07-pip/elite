@@ -4076,6 +4076,24 @@ async def handle_verify_command(update: Update,
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
+async def handle_refer_command(update: Update,
+                               context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    user_id = update.message.from_user.id
+    ref_link = f"https://t.me/EcroweBot?start=ref_{user_id}"
+
+    msg = (
+        f"Invite friends with your link:\n"
+        f"<code>{ref_link}</code>\n\n"
+        f"They must open it before creating/participating in any deal. "
+        f"You earn <b>30.00%</b> of their side fees."
+    )
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+
 async def handle_increase_command(update: Update,
                                   context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
@@ -4274,6 +4292,7 @@ app.add_handler(CommandHandler("stats", handle_stats_command))
 app.add_handler(CommandHandler("increase", handle_increase_command))
 app.add_handler(CommandHandler("help", handle_help_command))
 app.add_handler(CommandHandler("verify", handle_verify_command))
+app.add_handler(CommandHandler("refer", handle_refer_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
