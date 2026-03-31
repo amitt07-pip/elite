@@ -2810,7 +2810,7 @@ async def handle_release_final(update: Update,
             await query.answer("Processing...")
             await asyncio.sleep(4)
 
-            # Step 2: Closed status
+            # Step 2: Closed status (no buttons)
             closed_msg = build_closed_message(
                 escrow_id, escrow, payout_address,
                 "release", received_amount
@@ -2821,16 +2821,14 @@ async def handle_release_final(update: Update,
                         chat_id=room_chat_id,
                         message_id=fee_msg_id,
                         text=closed_msg,
-                        parse_mode="HTML",
-                        reply_markup=processing_kb
+                        parse_mode="HTML"
                     )
                 except Exception:
                     pass
 
             # Step 3: Send completion message
-            buyer_fee = 0.00
-            seller_fee = 0.00
-            total_fee = buyer_fee + seller_fee
+            buyer_fee, seller_fee, total_fee, _, _ = \
+                get_fees_from_escrow(escrow)
             net_sent = received_amount - total_fee
 
             completion_msg = (
@@ -2988,7 +2986,7 @@ async def handle_refund_final(update: Update,
             await query.answer("Processing...")
             await asyncio.sleep(4)
 
-            # Step 2: Closed status
+            # Step 2: Closed status (no buttons)
             closed_msg = build_closed_message(
                 escrow_id, escrow, payout_address,
                 "refund", received_amount
@@ -2999,16 +2997,14 @@ async def handle_refund_final(update: Update,
                         chat_id=room_chat_id,
                         message_id=fee_msg_id,
                         text=closed_msg,
-                        parse_mode="HTML",
-                        reply_markup=processing_kb
+                        parse_mode="HTML"
                     )
                 except Exception:
                     pass
 
             # Step 3: Send completion message
-            buyer_fee = 0.00
-            seller_fee = 0.00
-            total_fee = buyer_fee + seller_fee
+            buyer_fee, seller_fee, total_fee, _, _ = \
+                get_fees_from_escrow(escrow)
             net_sent = received_amount - total_fee
 
             completion_msg = (
