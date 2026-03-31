@@ -164,6 +164,48 @@ def set_user_stats(user_id, data):
     save_user_stats(stats)
 
 
+def find_fixed_stats_by_username(username):
+    """Look up fixed stats for a username, trying all key formats.
+
+    Checks @username, username (case variants), and also resolves
+    the username to a user_id by scanning past escrows so stats
+    stored by numeric user_id are found too.
+    """
+    if not username:
+        return None
+    uname = username.strip().lstrip("@")
+
+    # Try direct username keys
+    for key in (f"@{uname}", f"@{uname.lower()}", uname, uname.lower()):
+        result = get_user_stats(key)
+        if result:
+            return result
+
+    # Resolve username → user_id via past escrows
+    uname_lower = uname.lower()
+    escrows = load_escrows()
+    resolved_uid = None
+    for eid, data in escrows.items():
+        s_un = (data.get("seller") or "").strip().lstrip("@").lower()
+        b_un = (data.get("buyer") or "").strip().lstrip("@").lower()
+        if s_un == uname_lower and data.get("seller_user_id"):
+            resolved_uid = data["seller_user_id"]
+            break
+        if b_un == uname_lower and data.get("buyer_user_id"):
+            resolved_uid = data["buyer_user_id"]
+            break
+
+    if resolved_uid:
+        result = get_user_stats(str(resolved_uid))
+        if result:
+            return result
+        result = get_user_stats(resolved_uid)
+        if result:
+            return result
+
+    return None
+
+
 def compute_real_stats(user_id, username):
     """Compute stats from actual escrow deals for a user."""
     escrows = load_escrows()
@@ -1522,17 +1564,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         form_chat_id = update.message.chat_id
 
         # Seller stats → shown to buyer
-        # Try multiple key formats: @username, @Username, username
-        seller_fixed = None
-        if seller_un:
-            seller_fixed = get_user_stats(f"@{seller_un}")
-            if not seller_fixed:
-                seller_fixed = get_user_stats(
-                    f"@{seller_un.lower()}")
-            if not seller_fixed:
-                seller_fixed = get_user_stats(seller_un)
-            if not seller_fixed:
-                seller_fixed = get_user_stats(seller_un.lower())
+        seller_fixed = find_fixed_stats_by_username(seller_un)
         if seller_fixed:
             s_title = "💼 Proper Dealer" if not seller_fixed.get(
                 "is_new_user", True) else "🍼 Bachkana Dealer"
@@ -1559,16 +1591,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Buyer stats → shown to seller
-        buyer_fixed = None
-        if buyer_un:
-            buyer_fixed = get_user_stats(f"@{buyer_un}")
-            if not buyer_fixed:
-                buyer_fixed = get_user_stats(
-                    f"@{buyer_un.lower()}")
-            if not buyer_fixed:
-                buyer_fixed = get_user_stats(buyer_un)
-            if not buyer_fixed:
-                buyer_fixed = get_user_stats(buyer_un.lower())
+        buyer_fixed = find_fixed_stats_by_username(buyer_un)
         if buyer_fixed:
             b_title = "💼 Proper Dealer" if not buyer_fixed.get(
                 "is_new_user", True) else "🍼 Bachkana Dealer"
