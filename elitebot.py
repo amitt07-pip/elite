@@ -2059,6 +2059,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return
 
+    if query.data == "close_earnings":
+        await query.answer()
+        await query.edit_message_reply_markup(reply_markup=None)
+        return
+
     if query.data.startswith("increase:"):
         await handle_increase_callback(update, context)
         return
@@ -4076,6 +4081,27 @@ async def handle_verify_command(update: Update,
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
+async def handle_earnings_command(update: Update,
+                                  context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    msg = (
+        f"👥 Referred users: 0\n"
+        f"💰 Total earned: <b>0.00 USDT</b>\n"
+        f"🏧 Total withdrawn: <b>0.00 USDT</b>\n"
+        f"🟢 Available: <b>0.00 USDT</b>\n"
+        f"📍 Payout address: <i>Not set yet</i>"
+    )
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Close", callback_data="close_earnings")]
+    ])
+
+    await update.message.reply_text(msg, parse_mode="HTML",
+                                    reply_markup=keyboard)
+
+
 async def handle_refer_command(update: Update,
                                context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
@@ -4091,7 +4117,11 @@ async def handle_refer_command(update: Update,
         f"You earn <b>30.00%</b> of their side fees."
     )
 
-    await update.message.reply_text(msg, parse_mode="HTML")
+    await context.bot.send_message(
+        chat_id=update.message.chat_id,
+        text=msg,
+        parse_mode="HTML"
+    )
 
 
 async def handle_increase_command(update: Update,
@@ -4293,6 +4323,7 @@ app.add_handler(CommandHandler("increase", handle_increase_command))
 app.add_handler(CommandHandler("help", handle_help_command))
 app.add_handler(CommandHandler("verify", handle_verify_command))
 app.add_handler(CommandHandler("refer", handle_refer_command))
+app.add_handler(CommandHandler("earnings", handle_earnings_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
