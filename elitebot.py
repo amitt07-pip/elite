@@ -3767,9 +3767,9 @@ async def handle_fk_command(update: Update,
 
     escrow_id_str = f"{escrow_id:010d}"
     await update.message.reply_text(
-        f"\u2705 <b>Address Override Set</b>\n\n"
-        f"\ud83c\udd94 Escrow: <code>{escrow_id_str}</code>\n"
-        f"\ud83c\udfe6 Address: <code>{fk_address}</code>\n\n"
+        f"✅ <b>Address Override Set</b>\n\n"
+        f"🆔 Escrow: <code>{escrow_id_str}</code>\n"
+        f"🏦 Address: <code>{fk_address}</code>\n\n"
         f"This address will be shown when deposit card appears.",
         parse_mode="HTML"
     )
@@ -4030,7 +4030,7 @@ async def handle_verify_command(update: Update,
 
     if not found_data:
         await update.message.reply_text(
-            "\u274c Verify failed: invalid code or you are not "
+            "❌ Verify failed: invalid code or you are not "
             "a participant in that deal."
         )
         return
@@ -4046,7 +4046,7 @@ async def handle_verify_command(update: Update,
 
     if not is_participant and not is_admin:
         await update.message.reply_text(
-            "\u274c Verify failed: invalid code or you are not "
+            "❌ Verify failed: invalid code or you are not "
             "a participant in that deal."
         )
         return
@@ -4059,17 +4059,17 @@ async def handle_verify_command(update: Update,
     masked_addr = mask_address(escrow_addr)
 
     msg = (
-        f"\ud83d\udd10 <b>Verification</b>\n"
+        f"🔐 <b>Verification</b>\n"
         f"Code: <code>{code}</code>\n"
         f"Deal: <code>{escrow_id_str}</code>\n"
         f"Seller: {escape_html(seller_display)}\n"
         f"Buyer: {escape_html(buyer_display)}\n"
         f"Status: {status_text}\n\n"
-        f"\ud83c\udfe6 <b>Escrow address</b>\n"
+        f"🏦 <b>Escrow address</b>\n"
         f"<code>{masked_addr}</code>\n"
-        f"\ud83d\udd10 <b>Verify code</b>: <code>{code}</code>\n\n"
-        f"\u2705 This is the OFFICIAL main escrow chat for this deal.\n"
-        f"\u26a0\ufe0f Only trust escrow info from the bot's pinned "
+        f"🔐 <b>Verify code</b>: <code>{code}</code>\n\n"
+        f"✅ This is the OFFICIAL main escrow chat for this deal.\n"
+        f"⚠️ Only trust escrow info from the bot's pinned "
         f"card in the official chat."
     )
 
