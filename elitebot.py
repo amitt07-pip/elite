@@ -490,8 +490,8 @@ def validate_escrow_form(data, sender_username):
 
     seller = data["seller"]
     buyer = data["buyer"]
-    amount_str = data["amount"]
-    rate_str = data["rate"]
+    amount_str = re.sub(r"[^0-9.]", "", data["amount"])
+    rate_str = re.sub(r"[^0-9.]", "", data["rate"])
     time_val = data["time"]
 
     if seller.lower() == "me":
@@ -508,6 +508,8 @@ def validate_escrow_form(data, sender_username):
     elif not buyer.startswith("@"):
         buyer = f"@{buyer}"
 
+    if not amount_str:
+        return None, "Invalid amount"
     try:
         amount = float(amount_str)
         if amount <= 0:
@@ -515,6 +517,8 @@ def validate_escrow_form(data, sender_username):
     except ValueError:
         return None, "Invalid amount"
 
+    if not rate_str:
+        return None, "Invalid rate"
     try:
         rate = float(rate_str)
         if rate <= 0:
