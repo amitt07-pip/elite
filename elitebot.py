@@ -1430,8 +1430,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         form_chat_id = update.message.chat_id
 
         # Seller stats → shown to buyer
-        seller_fixed = get_user_stats(f"@{seller_un}") if seller_un \
-            else None
+        # Try multiple key formats: @username, @Username, username
+        seller_fixed = None
+        if seller_un:
+            seller_fixed = get_user_stats(f"@{seller_un}")
+            if not seller_fixed:
+                seller_fixed = get_user_stats(
+                    f"@{seller_un.lower()}")
+            if not seller_fixed:
+                seller_fixed = get_user_stats(seller_un)
+            if not seller_fixed:
+                seller_fixed = get_user_stats(seller_un.lower())
         if seller_fixed:
             s_title = "💼 Proper Dealer" if not seller_fixed.get(
                 "is_new_user", True) else "🍼 Bachkana Dealer"
@@ -1458,8 +1467,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Buyer stats → shown to seller
-        buyer_fixed = get_user_stats(f"@{buyer_un}") if buyer_un \
-            else None
+        buyer_fixed = None
+        if buyer_un:
+            buyer_fixed = get_user_stats(f"@{buyer_un}")
+            if not buyer_fixed:
+                buyer_fixed = get_user_stats(
+                    f"@{buyer_un.lower()}")
+            if not buyer_fixed:
+                buyer_fixed = get_user_stats(buyer_un)
+            if not buyer_fixed:
+                buyer_fixed = get_user_stats(buyer_un.lower())
         if buyer_fixed:
             b_title = "💼 Proper Dealer" if not buyer_fixed.get(
                 "is_new_user", True) else "🍼 Bachkana Dealer"
