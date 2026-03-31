@@ -3078,11 +3078,29 @@ async def handle_new_chat_members(update: Update,
         escrow_id, escrow = get_escrow_by_room_chat_id(chat_id)
         if escrow_id:
             try:
-                room_invite = await context.bot.create_chat_invite_link(
-                    chat_id=chat_id,
-                    creates_join_request=True,
-                    name="Room link"
-                )
+                # Wait for admin promotion (happens shortly after
+                # bot invite in create_escrow_room)
+                room_invite = None
+                for attempt in range(15):
+                    try:
+                        room_invite = (
+                            await context.bot.create_chat_invite_link(
+                                chat_id=chat_id,
+                                creates_join_request=True,
+                                name="Room link"
+                            )
+                        )
+                        break
+                    except Exception:
+                        if attempt < 14:
+                            await asyncio.sleep(1)
+                        else:
+                            raise
+                if not room_invite:
+                    print(f"[ROOM-SETUP] Failed to create invite "
+                          f"link after retries for {escrow_id}",
+                          flush=True)
+                    return
 
                 room_msg = build_room_initial_message(escrow_id, escrow)
                 room_keyboard = build_room_initial_keyboard(
