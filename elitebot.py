@@ -1543,6 +1543,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        # Check sender is listed as seller or buyer (or is admin)
+        sender_id = (update.message.from_user.id
+                     if update.message.from_user else None)
+        seller_clean = (validated.get("seller", "")
+                        .strip().lstrip("@").lower())
+        buyer_clean = (validated.get("buyer", "")
+                       .strip().lstrip("@").lower())
+        sender_clean = (sender_username or "").lower()
+        is_party = (sender_clean == seller_clean
+                    or sender_clean == buyer_clean)
+        is_admin = sender_id in ADMIN_IDS if sender_id else False
+
+        if not is_party and not is_admin:
+            await context.bot.send_message(
+                chat_id=update.message.chat_id,
+                text="❌ Only listed Seller/Buyer (or admin) "
+                     "can create this deal.",
+                parse_mode="HTML"
+            )
+            return
+
         # Delete the filled form message
         try:
             await context.bot.delete_message(
