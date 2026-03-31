@@ -24,6 +24,7 @@ from telethon.tl.functions.channels import (
     EditAdminRequest,
     LeaveChannelRequest,
 )
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import ChatAdminRights
 from telethon import utils as telethon_utils
 import database
@@ -227,6 +228,89 @@ async def init_telethon_client():
         me = await telethon_client.get_me()
         USERBOT_ID = me.id
     return telethon_client
+
+
+ELITE_BIO_TAG = "@Elite_MarketPlace"
+
+
+async def check_user_has_elite_bio(user_id):
+    """Check if a user has @Elite_MarketPlace in their Telegram bio."""
+    try:
+        client = await init_telethon_client()
+        if not client:
+            return False
+        user = await client.get_entity(int(user_id))
+        full = await client(
+            GetFullUserRequest(user)
+        )
+        bio = full.full_user.about or ""
+        return ELITE_BIO_TAG.lower() in bio.lower()
+    except Exception as e:
+        print(f"[BIO] Error checking bio for {user_id}: {e}",
+              flush=True)
+        return False
+
+
+def calculate_escrow_fees(amount, buyer_has_bio, seller_has_bio):
+    """Calculate escrow fees based on amount and bio status.
+
+    Returns (buyer_fee, seller_fee, buyer_promo, seller_promo).
+    """
+    if amount < 100:
+        return (
+            0.00, 0.00,
+            "This deal is free by amount threshold - promo "
+            "status is still tracked for future deals.",
+            "This deal is free by amount threshold — promo "
+            "status is still tracked for future deals."
+        )
+
+    buyer_fee = 0.00 if buyer_has_bio else 0.50
+    seller_fee = 0.00 if seller_has_bio else 0.50
+
+    if buyer_has_bio:
+        buyer_promo = (
+            "Bio found — promo fees applied on this deal."
+        )
+    else:
+        buyer_promo = (
+            "No bio found — add @EliteMarket_Place for "
+            "promo fees on future deals"
+        )
+
+    if seller_has_bio:
+        seller_promo = (
+            "Bio found — promo fees applied on this deal."
+        )
+    else:
+        seller_promo = (
+            "No bio found — add @EliteMarket_Place for "
+            "promo fees on future deals"
+        )
+
+    return buyer_fee, seller_fee, buyer_promo, seller_promo
+
+
+def get_fees_from_escrow(data):
+    """Read stored fee info from escrow data.
+
+    Returns (buyer_fee, seller_fee, total_fee,
+             buyer_promo, seller_promo).
+    """
+    buyer_fee = data.get("buyer_fee", 0.00)
+    seller_fee = data.get("seller_fee", 0.00)
+    total_fee = buyer_fee + seller_fee
+    buyer_promo = data.get(
+        "buyer_promo",
+        "This deal is free by amount threshold - promo "
+        "status is still tracked for future deals."
+    )
+    seller_promo = data.get(
+        "seller_promo",
+        "This deal is free by amount threshold — promo "
+        "status is still tracked for future deals."
+    )
+    return buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo
 
 
 async def create_escrow_room(escrow_id):
@@ -572,18 +656,16 @@ def build_fee_selection_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    # Escrow fees (currently free)
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = 0.00
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -624,10 +706,8 @@ def build_fee_acceptance_message(escrow_id, data, seller_accepted=False,
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    # Escrow fees (currently free)
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     escrow_id_str = f"{escrow_id:010d}"
 
@@ -739,10 +819,8 @@ def build_deposit_message(escrow_id, data, escrow_address, status="awaiting"):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
-    # Escrow fees (currently free)
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     escrow_id_str = f"{escrow_id:010d}"
 
@@ -754,8 +832,8 @@ def build_deposit_message(escrow_id, data, escrow_address, status="awaiting"):
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -790,18 +868,23 @@ def build_payment_detected_message(escrow_id, data, confirmations):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
+
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
-
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
 
 <b>Status</b>: Payment detected. Waiting confirmations on-chain...
 
@@ -821,10 +904,8 @@ def build_deposit_verified_message(escrow_id, data,
     time_val = escape_html(data["time"])
     escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
-    # Escrow fees (currently free)
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     if received_amount is None:
         received_amount = amount
@@ -835,8 +916,8 @@ def build_deposit_verified_message(escrow_id, data,
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -893,9 +974,8 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
     time_val = escape_html(data["time"])
     escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
@@ -910,8 +990,8 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -944,9 +1024,8 @@ def build_address_paste_message(escrow_id, data, flow_type="release",
     time_val = escape_html(data["time"])
     escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
@@ -957,8 +1036,8 @@ def build_address_paste_message(escrow_id, data, flow_type="release",
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -989,13 +1068,8 @@ def build_payout_message(escrow_id, data, payout_address,
     time_val = escape_html(data["time"])
     escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
-    # Escrow fees - max 0.5 USDT each, 0.00 if amount < 100
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    if amount >= 100:
-        buyer_fee = 0.00  # currently free
-        seller_fee = 0.00  # currently free
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
@@ -1007,8 +1081,8 @@ def build_payout_message(escrow_id, data, payout_address,
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -1045,17 +1119,16 @@ def build_processing_message(escrow_id, data):
     time_val = escape_html(data["time"])
     escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -1085,9 +1158,8 @@ def build_closed_message(escrow_id, data, payout_address,
     time_val = escape_html(data["time"])
     escrow_address = data.get("escrow_address", ESCROW_ADDRESSES[0])
 
-    buyer_fee = 0.00
-    seller_fee = 0.00
-    total_fee = buyer_fee + seller_fee
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
 
     if received_amount is None:
         received_amount = data.get("deposit_amount", amount)
@@ -1098,8 +1170,8 @@ def build_closed_message(escrow_id, data, payout_address,
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: This deal is free by amount threshold - promo status is still tracked for future deals.
-👤 <b>Seller promo</b>: This deal is free by amount threshold — promo status is still tracked for future deals.
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
 
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
@@ -1197,20 +1269,25 @@ def build_seller_initiated_release_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
+
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
 📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
-
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
 
 <b>Status</b>: Seller initiated release.
 Buyer must provide BEP-20 address to receive funds."""
@@ -1226,20 +1303,25 @@ def build_released_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
+
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
 📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
-
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
 
 <b>Status</b>: 🔓 Released (payout sent)."""
 
@@ -1254,20 +1336,25 @@ def build_partial_refund_message(escrow_id, data, confirmations):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
+
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
 📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
-
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
 
 <b>Status</b>: ✅ Deposit VERIFIED.
 Choose <b>Full Release</b> to send all USDT to buyer, or \
@@ -1313,20 +1400,25 @@ def build_buyer_initiated_refund_message(escrow_id, data):
     total_inr = data["total_inr"]
     time_val = escape_html(data["time"])
 
+    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
+        get_fees_from_escrow(data)
+
     escrow_id_str = f"{escrow_id:010d}"
 
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
+🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
+👤 <b>Buyer promo</b>: {buyer_promo}
+👤 <b>Seller promo</b>: {seller_promo}
+
 ✅ <b>Seller</b>: {seller}
 ✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT (BEP-20)
+💵 <b>Amount</b>: {amount:.1f} USDT
 💱 <b>Rate</b>: {rate:.1f} INR/USDT
 💰 <b>Total INR</b>: ₹{total_inr:.1f}
 🕒 <b>Time</b>: {time_val}
 
 📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
-
-🎉 <b>New Year Offer</b>: <code>0 USDT</code> platform fee - escrow is FREE.
 
 <b>Status</b>: Buyer initiated refund.
 Seller must provide BEP-20 address to receive funds."""
@@ -3256,6 +3348,34 @@ async def handle_join_request(update: Update,
 async def update_room_to_fee_selection(context, escrow_id, escrow):
     room_chat_id = escrow.get("room_chat_id")
     room_fee_msg_id = escrow.get("room_fee_message_id")
+
+    # Check bios and calculate fees before showing fee selection
+    buyer_uid = escrow.get("buyer_user_id")
+    seller_uid = escrow.get("seller_user_id")
+    amount = escrow.get("amount", 0)
+
+    buyer_has_bio = False
+    seller_has_bio = False
+    if buyer_uid:
+        buyer_has_bio = await check_user_has_elite_bio(buyer_uid)
+    if seller_uid:
+        seller_has_bio = await check_user_has_elite_bio(seller_uid)
+
+    buyer_fee, seller_fee, buyer_promo, seller_promo = \
+        calculate_escrow_fees(amount, buyer_has_bio, seller_has_bio)
+
+    escrow["buyer_fee"] = buyer_fee
+    escrow["seller_fee"] = seller_fee
+    escrow["buyer_promo"] = buyer_promo
+    escrow["seller_promo"] = seller_promo
+    escrow["buyer_has_bio"] = buyer_has_bio
+    escrow["seller_has_bio"] = seller_has_bio
+    update_escrow(escrow_id, escrow)
+
+    print(f"[FEE] Escrow {escrow_id}: amount={amount}, "
+          f"buyer_bio={buyer_has_bio}, seller_bio={seller_has_bio}, "
+          f"buyer_fee={buyer_fee}, seller_fee={seller_fee}",
+          flush=True)
 
     if room_chat_id and room_fee_msg_id:
         fee_msg = build_fee_selection_message(escrow_id, escrow)
