@@ -4081,6 +4081,114 @@ async def handle_verify_command(update: Update,
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
+async def handle_cancel_command(update: Update,
+                                context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    user_id = update.message.from_user.id
+    if user_id not in ADMIN_IDS:
+        await update.message.reply_text("❌ Admin only.")
+        return
+
+    args = context.args or []
+    escrow_id = None
+
+    # Try to get escrow_id from args
+    if len(args) > 0:
+        try:
+            escrow_id = int(args[0])
+        except ValueError:
+            await update.message.reply_text(
+                "Usage: /cancel [escrow_id] or reply to bot's message"
+            )
+            return
+    elif update.message.reply_to_message:
+        # Try to extract escrow ID from replied message text
+        replied_text = update.message.reply_to_message.text or ""
+        match = re.search(r'(\d{10})', replied_text)
+        if match:
+            escrow_id = int(match.group(1))
+        else:
+            await update.message.reply_text(
+                "❌ Could not find escrow ID in replied message."
+            )
+            return
+    else:
+        await update.message.reply_text(
+            "Usage: /cancel [escrow_id] or reply to bot's message"
+        )
+        return
+
+    escrow = get_escrow(escrow_id)
+    if not escrow:
+        await update.message.reply_text(
+            f"❌ Escrow <code>{escrow_id:010d}</code> not found.",
+            parse_mode="HTML"
+        )
+        return
+
+    if escrow.get("status") == "closed":
+        await update.message.reply_text(
+            f"❌ Escrow <code>{escrow_id:010d}</code> is already closed.",
+            parse_mode="HTML"
+        )
+        return
+
+    # Mark as closed/cancelled
+    update_escrow(escrow_id, {"status": "closed", "cancel_reason": "ADMIN_CANCEL"})
+
+    escrow_id_str = f"{escrow_id:010d}"
+    seller = escape_html(escrow.get("seller", "N/A").strip())
+    buyer = escape_html(escrow.get("buyer", "N/A").strip())
+
+    msg = (
+        f"✅ <b>Deal Cancelled</b>\n\n"
+        f"🆔 Escrow: <code>{escrow_id_str}</code>\n"
+        f"👤 Seller: {seller}\n"
+        f"👤 Buyer: {buyer}\n\n"
+        f"<b>Status</b>: ❌ Cancelled by admin."
+    )
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+    # Update room message if exists
+    room_chat_id = escrow.get("room_chat_id")
+    room_message_id = escrow.get("room_message_id")
+    if room_chat_id and room_message_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=room_chat_id,
+                message_id=room_message_id,
+                text=(
+                    f"🟢 Escrow • <code>{escrow_id_str}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"✅ <b>Seller</b>: {seller}\n"
+                    f"✅ <b>Buyer</b>: {buyer}\n\n"
+                    f"<b>Status</b>: ❌ Cancelled by admin."
+                ),
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+    # Log to deal channel
+    try:
+        await context.bot.send_message(
+            chat_id=DEAL_CHANNEL_ID,
+            text=(
+                f"❌ <b>Deal Cancelled</b>\n"
+                f"Escrow: <code>{escrow_id_str}</code>\n"
+                f"Seller: {seller}\n"
+                f"Buyer: {buyer}\n"
+                f"Cancelled by: {user_id}"
+            ),
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+
 async def handle_earnings_command(update: Update,
                                   context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
@@ -4324,6 +4432,7 @@ app.add_handler(CommandHandler("help", handle_help_command))
 app.add_handler(CommandHandler("verify", handle_verify_command))
 app.add_handler(CommandHandler("refer", handle_refer_command))
 app.add_handler(CommandHandler("earnings", handle_earnings_command))
+app.add_handler(CommandHandler("cancel", handle_cancel_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
