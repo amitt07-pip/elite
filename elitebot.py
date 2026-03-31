@@ -44,7 +44,7 @@ ALLOWED_GROUP_IDS = [
     -1003450478165,  # Backup group
 ]
 
-ESCROW_TEXT = """<b>🛡 Escrow Form</b>
+ESCROW_TEXT = """🛡 <b>Escrow</b> Form
 <code>Seller: @
 Buyer: @
 Amount[USDT]: 
