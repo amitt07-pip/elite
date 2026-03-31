@@ -1468,7 +1468,7 @@ Seller must provide BEP-20 address to receive funds."""
     return message
 
 
-DEAL_CHANNEL_ID = -1003266978268
+DEAL_CHANNEL_ID = -1003886373080
 
 
 def build_deal_completed_message(escrow_id, data, group_link):
