@@ -837,8 +837,7 @@ def build_fee_acceptance_keyboard(escrow_id):
 
 
 ESCROW_ADDRESSES = [
-    "0xDA4c2a5B876b0c7521e1c752690D8705080000fE",
-    "0xf282e789e835ed379aea84ece204d2d643e6774f"
+    "0x8c640881238BEC28509bB3a8F37Dbf3398668a4F",
 ]
 BSCSCAN_API_KEY = "1JPI1W7W26UICIYDQNAEE2M1D7A7B3IUIS"
 DEPOSIT_ADDRESS = "0x8c640881238BEC28509bB3a8F37Dbf3398668a4F"
@@ -847,12 +846,7 @@ DEPOSIT_POLL_INTERVAL = 20  # seconds between BscScan polls
 
 
 def get_next_escrow_address():
-    state = load_state()
-    last_index = state.get("last_address_index", 1)
-    next_index = (last_index + 1) % 2
-    state["last_address_index"] = next_index
-    save_state(state)
-    return ESCROW_ADDRESSES[next_index]
+    return ESCROW_ADDRESSES[0]
 
 
 def get_escrow_address_for_verification(escrow):
