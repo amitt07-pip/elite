@@ -170,6 +170,22 @@ def set_user_stats(user_id, data):
     save_user_stats(stats)
 
 
+def resolve_full_name(username):
+    """Resolve a username to a full name by scanning past escrows."""
+    if not username:
+        return username
+    uname = username.strip().lstrip("@").lower()
+    escrows = load_escrows()
+    for eid, data in escrows.items():
+        s_un = (data.get("seller") or "").strip().lstrip("@").lower()
+        b_un = (data.get("buyer") or "").strip().lstrip("@").lower()
+        if s_un == uname and data.get("seller_full_name"):
+            return data["seller_full_name"]
+        if b_un == uname and data.get("buyer_full_name"):
+            return data["buyer_full_name"]
+    return username
+
+
 def find_fixed_stats_by_username(username):
     """Look up fixed stats for a username, trying all key formats.
 
@@ -1612,12 +1628,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 s_title = "🍼 Bachkana Dealer"
             s_total = seller_fixed.get("total", 0)
             s_completed = seller_fixed.get("completed", 0)
-            s_name = seller_un
+            s_name = resolve_full_name(seller_un)
         else:
             s_title = "🍼 Bachkana Dealer"
             s_total = 0
             s_completed = 0
-            s_name = seller_un
+            s_name = resolve_full_name(seller_un)
 
         buyer_stats_msg = (
             f"Hi @{escape_html(buyer_un)}, your Seller "
@@ -1644,12 +1660,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 b_title = "🍼 Bachkana Dealer"
             b_total = buyer_fixed.get("total", 0)
             b_completed = buyer_fixed.get("completed", 0)
-            b_name = buyer_un
+            b_name = resolve_full_name(buyer_un)
         else:
             b_title = "🍼 Bachkana Dealer"
             b_total = 0
             b_completed = 0
-            b_name = buyer_un
+            b_name = resolve_full_name(buyer_un)
 
         seller_stats_msg = (
             f"Hi @{escape_html(seller_un)}, your Buyer "
@@ -2126,12 +2142,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             seller_user_id = query.from_user.id
+            seller_full_name = query.from_user.full_name or ""
             update_escrow(escrow_id, {
                 "seller_confirmed": True,
-                "seller_user_id": seller_user_id
+                "seller_user_id": seller_user_id,
+                "seller_full_name": seller_full_name
             })
             escrow["seller_confirmed"] = True
             escrow["seller_user_id"] = seller_user_id
+            escrow["seller_full_name"] = seller_full_name
 
         elif action == "buyer":
             buyer_username = normalize_username(escrow["buyer"])
@@ -2147,12 +2166,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             buyer_user_id = query.from_user.id
+            buyer_full_name = query.from_user.full_name or ""
             update_escrow(escrow_id, {
                 "buyer_confirmed": True,
-                "buyer_user_id": buyer_user_id
+                "buyer_user_id": buyer_user_id,
+                "buyer_full_name": buyer_full_name
             })
             escrow["buyer_confirmed"] = True
             escrow["buyer_user_id"] = buyer_user_id
+            escrow["buyer_full_name"] = buyer_full_name
 
         seller_ok = escrow["seller_confirmed"]
         buyer_ok = escrow["buyer_confirmed"]
