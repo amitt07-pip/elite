@@ -3,6 +3,7 @@ import json
 import os
 import random
 import re
+import string
 import aiohttp
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -99,6 +100,12 @@ def get_next_escrow_id():
     return escrow_id
 
 
+def generate_verify_code():
+    """Generate a unique 8-character alphanumeric verify code."""
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=8))
+
+
 def save_escrow(escrow_id, data, chat_id, message_id):
     escrows = load_escrows()
     escrows[str(escrow_id)] = {
@@ -112,6 +119,7 @@ def save_escrow(escrow_id, data, chat_id, message_id):
         "message_id": message_id,
         "seller_confirmed": False,
         "buyer_confirmed": False,
+        "verify_code": generate_verify_code(),
     }
     save_escrows(escrows)
 
@@ -912,7 +920,7 @@ def build_deposit_message(escrow_id, data, escrow_address, status="awaiting"):
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 {status_text}"""
@@ -996,7 +1004,7 @@ def build_deposit_verified_message(escrow_id, data,
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 📥 <b>Received</b>: {received_amount:.2f} USDT
@@ -1070,7 +1078,7 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 <b>Status</b>: Full {action_word} (double confirm).
@@ -1116,7 +1124,7 @@ def build_address_paste_message(escrow_id, data, flow_type="release",
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 <b>Status</b>: {address_party} must paste payout address.
@@ -1161,7 +1169,7 @@ def build_payout_message(escrow_id, data, payout_address,
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 <b>Status</b>: ⚠ FINAL CONFIRMATION before {action_word}.
@@ -1207,7 +1215,7 @@ def build_processing_message(escrow_id, data):
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 <b>Status</b>: ⏳ Processing on-chain…"""
@@ -1250,7 +1258,7 @@ def build_closed_message(escrow_id, data, payout_address,
 
 🏦 <b>Escrow address</b>:
 <code>{escrow_address}</code>
-🔐 <b>Verify code</b>: <code>08FEV4AW</code>
+🔐 <b>Verify code</b>: <code>{data.get("verify_code", "N/A")}</code>
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 <b>Status</b>: ✅ Closed.
@@ -3972,6 +3980,108 @@ async def handle_help_command(update: Update,
     await update.message.reply_text(help_text, parse_mode="HTML")
 
 
+def get_escrow_status_text(data):
+    """Determine the current status text for an escrow deal."""
+    status = data.get("status", "")
+    if status == "closed":
+        return "<b>CLOSED</b>"
+    if status == "processing":
+        return "<b>PROCESSING</b>"
+    if data.get("deposit_verified"):
+        return "<b>DEPOSIT_VERIFIED</b>"
+    if data.get("escrow_address"):
+        return "<b>AWAIT_DEPOSIT</b>"
+    if data.get("fee_accepted"):
+        return "<b>FEE_ACCEPTED</b>"
+    if data.get("room_chat_id"):
+        return "<b>IN_ROOM</b>"
+    if data.get("seller_confirmed") and data.get("buyer_confirmed"):
+        return "<b>BOTH_CONFIRMED</b>"
+    return "<b>PENDING</b>"
+
+
+def mask_address(address):
+    """Mask escrow address: first 4 chars + *** + last 4 chars."""
+    if not address or len(address) < 10:
+        return address or "N/A"
+    return f"{address[:4]}{'*' * (len(address) - 8)}{address[-4:]}"
+
+
+async def handle_verify_command(update: Update,
+                                context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    args = context.args or []
+    if len(args) == 0:
+        await update.message.reply_text(
+            "Usage: <code>/verify F8B4EB1A</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    code = args[0].upper()
+    user = update.message.from_user
+    user_username = (user.username or "").lower()
+
+    # Find escrow by verify code
+    escrows = load_escrows()
+    found_eid = None
+    found_data = None
+    for eid, data in escrows.items():
+        if data.get("verify_code", "").upper() == code:
+            found_eid = eid
+            found_data = data
+            break
+
+    if not found_data:
+        await update.message.reply_text(
+            "\u274c Verify failed: invalid code or you are not "
+            "a participant in that deal."
+        )
+        return
+
+    # Check if user is buyer or seller in this deal
+    seller_un = (found_data.get("seller", "")
+                 .strip().lstrip("@").lower())
+    buyer_un = (found_data.get("buyer", "")
+                .strip().lstrip("@").lower())
+    is_participant = (user_username == seller_un
+                      or user_username == buyer_un)
+    is_admin = user.id in ADMIN_IDS
+
+    if not is_participant and not is_admin:
+        await update.message.reply_text(
+            "\u274c Verify failed: invalid code or you are not "
+            "a participant in that deal."
+        )
+        return
+
+    escrow_id_str = f"{int(found_eid):010d}"
+    seller_display = found_data.get("seller", "N/A").strip()
+    buyer_display = found_data.get("buyer", "N/A").strip()
+    status_text = get_escrow_status_text(found_data)
+    escrow_addr = found_data.get("escrow_address", ESCROW_ADDRESSES[0])
+    masked_addr = mask_address(escrow_addr)
+
+    msg = (
+        f"\ud83d\udd10 <b>Verification</b>\n"
+        f"Code: <code>{code}</code>\n"
+        f"Deal: <code>{escrow_id_str}</code>\n"
+        f"Seller: {escape_html(seller_display)}\n"
+        f"Buyer: {escape_html(buyer_display)}\n"
+        f"Status: {status_text}\n\n"
+        f"\ud83c\udfe6 <b>Escrow address</b>\n"
+        f"<code>{masked_addr}</code>\n"
+        f"\ud83d\udd10 <b>Verify code</b>: <code>{code}</code>\n\n"
+        f"\u2705 This is the OFFICIAL main escrow chat for this deal.\n"
+        f"\u26a0\ufe0f Only trust escrow info from the bot's pinned "
+        f"card in the official chat."
+    )
+
+    await update.message.reply_text(msg, parse_mode="HTML")
+
+
 async def handle_increase_command(update: Update,
                                   context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
@@ -4169,6 +4279,7 @@ app.add_handler(CommandHandler("start", handle_start_command))
 app.add_handler(CommandHandler("stats", handle_stats_command))
 app.add_handler(CommandHandler("increase", handle_increase_command))
 app.add_handler(CommandHandler("help", handle_help_command))
+app.add_handler(CommandHandler("verify", handle_verify_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
