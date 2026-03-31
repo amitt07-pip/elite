@@ -3885,6 +3885,33 @@ async def handle_stats_command(update: Update,
     await update.message.reply_text(msg, parse_mode="HTML")
 
 
+async def handle_help_command(update: Update,
+                              context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    if update.message.from_user.id not in ADMIN_IDS:
+        return
+
+    help_text = (
+        "<b>🛡 Admin Commands</b>\n\n"
+        "<code>/received [escrow_id]</code>\n"
+        "┗ Manually confirm deposit for an escrow\n\n"
+        "<code>/fk [escrow_id]</code>\n"
+        "┗ Override escrow address for a deal\n\n"
+        "<code>/increase</code>\n"
+        "┗ Boost stats for yourself\n\n"
+        "<code>/increase @username</code>\n"
+        "┗ Boost stats for a user\n\n"
+        "<code>/link [escrow_id]</code>\n"
+        "┗ Get invite link for an escrow room\n\n"
+        "<code>/help</code>\n"
+        "┗ Show this message"
+    )
+
+    await update.message.reply_text(help_text, parse_mode="HTML")
+
+
 async def handle_increase_command(update: Update,
                                   context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
@@ -4033,6 +4060,7 @@ app.add_handler(CommandHandler("link", handle_link_command))
 app.add_handler(CommandHandler("start", handle_start_command))
 app.add_handler(CommandHandler("stats", handle_stats_command))
 app.add_handler(CommandHandler("increase", handle_increase_command))
+app.add_handler(CommandHandler("help", handle_help_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
