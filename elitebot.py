@@ -1599,8 +1599,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Seller stats → shown to buyer
         seller_fixed = find_fixed_stats_by_username(seller_un)
         if seller_fixed:
-            s_title = "💼 Proper Dealer" if not seller_fixed.get(
-                "is_new_user", True) else "🍼 Bachkana Dealer"
+            s_role = seller_fixed.get("role", "")
+            if s_role == "heavy":
+                s_title = "🔥 Heavy Dealer"
+            elif not seller_fixed.get("is_new_user", True):
+                s_title = "💼 Proper Dealer"
+            else:
+                s_title = "🍼 Bachkana Dealer"
             s_total = seller_fixed.get("total", 0)
             s_completed = seller_fixed.get("completed", 0)
             s_name = seller_un
@@ -1626,8 +1631,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Buyer stats → shown to seller
         buyer_fixed = find_fixed_stats_by_username(buyer_un)
         if buyer_fixed:
-            b_title = "💼 Proper Dealer" if not buyer_fixed.get(
-                "is_new_user", True) else "🍼 Bachkana Dealer"
+            b_role = buyer_fixed.get("role", "")
+            if b_role == "heavy":
+                b_title = "🔥 Heavy Dealer"
+            elif not buyer_fixed.get("is_new_user", True):
+                b_title = "💼 Proper Dealer"
+            else:
+                b_title = "🍼 Bachkana Dealer"
             b_total = buyer_fixed.get("total", 0)
             b_completed = buyer_fixed.get("completed", 0)
             b_name = buyer_un
@@ -3840,7 +3850,10 @@ def build_stats_message(full_name, stats_data, is_new_user):
     kitna_kamaya = stats_data.get("kitna_kamaya", "$0.00")
     withdrawn = stats_data.get("withdrawn", "$0.00")
 
-    if is_new_user:
+    role = stats_data.get("role", "")
+    if role == "heavy":
+        title = "🔥 Heavy Dealer"
+    elif is_new_user:
         title = "🍼 Bachkana Dealer"
     else:
         title = "💼 Proper Dealer"
@@ -3971,6 +3984,10 @@ async def handle_increase_command(update: Update,
             callback_data=f"increase:bachkana:{target_user_id}"
         )],
         [InlineKeyboardButton(
+            "🔥 Heavy Dealer",
+            callback_data=f"increase:heavy:{target_user_id}"
+        )],
+        [InlineKeyboardButton(
             "💼 Proper Dealer",
             callback_data=f"increase:proper:{target_user_id}"
         )]
@@ -4021,6 +4038,50 @@ async def handle_increase_callback(update: Update,
 
         await query.edit_message_text(
             f"✅ Reset to 🍼 Bachkana Dealer for "
+            f"<b>{escape_html(str(target))}</b>",
+            parse_mode="HTML"
+        )
+        await query.answer("Done")
+        return
+
+    elif level == "heavy":
+        total_escrows = random.randint(10, 20)
+        completed = int(total_escrows * random.uniform(0.8, 0.9))
+        active_val = random.choice([0, 1])
+        volume = round(random.uniform(200.00, 500.00), 2)
+        avg_deal = round(volume / total_escrows, 2)
+        biggest = round(random.uniform(40.00, 70.00), 2)
+        reliability = f"{random.randint(80, 90)}%"
+        avg_completion = f"{random.randint(20, 30)}m"
+
+        fixed = {
+            "total": total_escrows,
+            "completed": completed,
+            "active": active_val,
+            "volume": volume,
+            "avg_deal": avg_deal,
+            "biggest": biggest,
+            "reliability": reliability,
+            "avg_completion": avg_completion,
+            "last_active": "just now",
+            "referrals": 0,
+            "kitna_kamaya": "$0.00",
+            "withdrawn": "$0.00",
+            "is_new_user": False,
+            "role": "heavy",
+        }
+
+        if target.startswith("@"):
+            set_user_stats(target, fixed)
+        else:
+            try:
+                tid = int(target)
+                set_user_stats(tid, fixed)
+            except ValueError:
+                set_user_stats(target, fixed)
+
+        await query.edit_message_text(
+            f"✅ Upgraded to 🔥 Heavy Dealer for "
             f"<b>{escape_html(str(target))}</b>",
             parse_mode="HTML"
         )
