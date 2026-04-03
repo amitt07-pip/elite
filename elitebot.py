@@ -194,6 +194,22 @@ def resolve_full_name(username):
     return username
 
 
+async def resolve_full_name_via_telethon(username):
+    """Resolve a username to full name via Telethon API."""
+    try:
+        client = await init_telethon_client()
+        if not client:
+            return None
+        entity = await client.get_entity(username.strip().lstrip("@"))
+        parts = [entity.first_name or "", entity.last_name or ""]
+        full = " ".join(p for p in parts if p).strip()
+        return full if full else None
+    except Exception as e:
+        print(f"[STATS] Telethon resolve failed for {username}: {e}",
+              flush=True)
+        return None
+
+
 def resolve_username_to_uid(username):
     """Resolve a @username to a numeric user_id via past escrows."""
     if not username:
@@ -3666,7 +3682,10 @@ async def handle_stats_command(update: Update,
     if len(args) > 0:
         # Looking up another user's stats: /stats @username
         target_username = args[0].strip().lstrip("@")
-        full_name = resolve_full_name(target_username)
+        # Always try to get actual full name from Telegram
+        full_name = await resolve_full_name_via_telethon(target_username)
+        if not full_name:
+            full_name = resolve_full_name(target_username)
 
         # Try to find fixed stats by username
         fixed_stats = find_fixed_stats_by_username(target_username)
