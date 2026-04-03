@@ -346,7 +346,7 @@ def calculate_escrow_fees(amount, buyer_has_bio, seller_has_bio):
         )
     else:
         buyer_promo = (
-            "No bio found — add @EliteMarket_Place for "
+            "No bio found — add @Elite_MarketPlace for "
             "promo fees on future deals"
         )
 
@@ -356,7 +356,7 @@ def calculate_escrow_fees(amount, buyer_has_bio, seller_has_bio):
         )
     else:
         seller_promo = (
-            "No bio found — add @EliteMarket_Place for "
+            "No bio found — add @Elite_MarketPlace for "
             "promo fees on future deals"
         )
 
