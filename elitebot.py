@@ -194,6 +194,38 @@ def resolve_full_name(username):
     return username
 
 
+def resolve_username_to_uid(username):
+    """Resolve a @username to a numeric user_id via past escrows."""
+    if not username:
+        return None
+    uname = username.strip().lstrip("@").lower()
+    escrows = load_escrows()
+    for eid, data in escrows.items():
+        s_un = (data.get("seller") or "").strip().lstrip("@").lower()
+        b_un = (data.get("buyer") or "").strip().lstrip("@").lower()
+        if s_un == uname and data.get("seller_user_id"):
+            return data["seller_user_id"]
+        if b_un == uname and data.get("buyer_user_id"):
+            return data["buyer_user_id"]
+    return None
+
+
+def migrate_username_stats_to_uid(username, user_id):
+    """If stats exist under @username key, move them to user_id key."""
+    if not username:
+        return
+    uname = username.strip().lstrip("@")
+    all_stats = load_user_stats()
+    migrated = False
+    for key in (f"@{uname}", f"@{uname.lower()}", uname, uname.lower()):
+        if key in all_stats and str(user_id) not in all_stats:
+            all_stats[str(user_id)] = all_stats.pop(key)
+            migrated = True
+            break
+    if migrated:
+        save_user_stats(all_stats)
+
+
 def find_fixed_stats_by_username(username):
     """Look up fixed stats for a username, trying all key formats.
 
@@ -212,18 +244,7 @@ def find_fixed_stats_by_username(username):
             return result
 
     # Resolve username → user_id via past escrows
-    uname_lower = uname.lower()
-    escrows = load_escrows()
-    resolved_uid = None
-    for eid, data in escrows.items():
-        s_un = (data.get("seller") or "").strip().lstrip("@").lower()
-        b_un = (data.get("buyer") or "").strip().lstrip("@").lower()
-        if s_un == uname_lower and data.get("seller_user_id"):
-            resolved_uid = data["seller_user_id"]
-            break
-        if b_un == uname_lower and data.get("buyer_user_id"):
-            resolved_uid = data["buyer_user_id"]
-            break
+    resolved_uid = resolve_username_to_uid(uname)
 
     if resolved_uid:
         result = get_user_stats(str(resolved_uid))
@@ -3960,9 +3981,13 @@ async def handle_stats_command(update: Update,
         user_id = user.id
         full_name = user.full_name or "Unknown"
 
+        # Auto-migrate any stats stored under @username to user_id
+        if user.username:
+            migrate_username_stats_to_uid(user.username, user_id)
+
         fixed_stats = get_user_stats(user_id)
         if not fixed_stats and user.username:
-            fixed_stats = get_user_stats(f"@{user.username}")
+            fixed_stats = find_fixed_stats_by_username(user.username)
 
         if fixed_stats:
             is_new = fixed_stats.get("is_new_user", False)
@@ -4285,9 +4310,15 @@ async def handle_increase_command(update: Update,
     else:
         target = args[0]
         if target.startswith("@"):
-            # Username - we'll store by username temporarily
-            target_display = target
-            target_user_id = target  # store as string @username
+            # Resolve @username to user_id via past escrows
+            resolved = resolve_username_to_uid(target)
+            if resolved:
+                target_user_id = int(resolved)
+                target_display = target
+            else:
+                # Can't resolve — store by @username as fallback
+                target_user_id = target
+                target_display = target
         else:
             try:
                 target_user_id = int(target)
@@ -4338,27 +4369,30 @@ async def handle_increase_callback(update: Update,
     level = parts[1]
     target = ":".join(parts[2:])  # rejoin in case of negative IDs
 
+    # Determine the storage key — prefer numeric user_id
+    store_key = target
+    try:
+        store_key = int(target)
+    except ValueError:
+        # If it's @username, try to resolve to user_id
+        if target.startswith("@"):
+            resolved = resolve_username_to_uid(target)
+            if resolved:
+                store_key = int(resolved)
+
     if level == "bachkana":
         # Reset to new user (remove fixed stats)
-        if target.startswith("@"):
-            # Can't resolve user ID from username easily,
-            # store by username
-            set_user_stats(target, None)
-        else:
-            try:
-                tid = int(target)
-                all_stats = load_user_stats()
-                if str(tid) in all_stats:
-                    del all_stats[str(tid)]
-                    save_user_stats(all_stats)
-            except ValueError:
-                all_stats = load_user_stats()
-                if target in all_stats:
-                    del all_stats[target]
-                    save_user_stats(all_stats)
+        all_stats = load_user_stats()
+        removed = False
+        for k in (str(store_key), target):
+            if k in all_stats:
+                del all_stats[k]
+                removed = True
+        if removed:
+            save_user_stats(all_stats)
 
         await query.edit_message_text(
-            f"✅ Reset to 🍼 Bachkana Dealer for "
+            f"\u2705 Reset to \U0001f37c Bachkana Dealer for "
             f"<b>{escape_html(str(target))}</b>",
             parse_mode="HTML"
         )
@@ -4392,17 +4426,10 @@ async def handle_increase_callback(update: Update,
             "role": "heavy",
         }
 
-        if target.startswith("@"):
-            set_user_stats(target, fixed)
-        else:
-            try:
-                tid = int(target)
-                set_user_stats(tid, fixed)
-            except ValueError:
-                set_user_stats(target, fixed)
+        set_user_stats(store_key, fixed)
 
         await query.edit_message_text(
-            f"✅ Upgraded to 🔥 Heavy Dealer for "
+            f"\u2705 Upgraded to \U0001f525 Heavy Dealer for "
             f"<b>{escape_html(str(target))}</b>",
             parse_mode="HTML"
         )
@@ -4432,17 +4459,10 @@ async def handle_increase_callback(update: Update,
             "is_new_user": False,
         }
 
-        if target.startswith("@"):
-            set_user_stats(target, fixed)
-        else:
-            try:
-                tid = int(target)
-                set_user_stats(tid, fixed)
-            except ValueError:
-                set_user_stats(target, fixed)
+        set_user_stats(store_key, fixed)
 
         await query.edit_message_text(
-            f"✅ Upgraded to 💼 Proper Dealer for "
+            f"\u2705 Upgraded to \U0001f4bc Proper Dealer for "
             f"<b>{escape_html(str(target))}</b>",
             parse_mode="HTML"
         )
