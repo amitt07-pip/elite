@@ -3925,35 +3925,64 @@ async def handle_stats_command(update: Update,
     if not update.message or not update.message.from_user:
         return
 
-    user = update.message.from_user
-    user_id = user.id
-    full_name = user.full_name or "Unknown"
+    args = context.args or []
 
-    # Check if user has fixed stats (from /increase) by user_id or @username
-    fixed_stats = get_user_stats(user_id)
-    if not fixed_stats and user.username:
-        fixed_stats = get_user_stats(f"@{user.username}")
+    if len(args) > 0:
+        # Looking up another user's stats: /stats @username
+        target_username = args[0].strip().lstrip("@")
+        full_name = resolve_full_name(target_username)
 
-    if fixed_stats:
-        is_new = fixed_stats.get("is_new_user", False)
-        msg = build_stats_message(full_name, fixed_stats, is_new)
+        # Try to find fixed stats by username
+        fixed_stats = find_fixed_stats_by_username(target_username)
+
+        if fixed_stats:
+            is_new = fixed_stats.get("is_new_user", False)
+            msg = build_stats_message(full_name, fixed_stats, is_new)
+        else:
+            zero_stats = {
+                "total": 0,
+                "completed": 0,
+                "active": 0,
+                "volume": 0.0,
+                "avg_deal": 0.0,
+                "biggest": 0.0,
+                "reliability": "100%",
+                "avg_completion": f"{random.randint(10, 20)}m",
+                "last_active": "just now",
+                "referrals": 0,
+                "kitna_kamaya": "$0.00",
+                "withdrawn": "$0.00",
+            }
+            msg = build_stats_message(full_name, zero_stats, True)
     else:
-        # Bachkana Dealer - everything is 0
-        zero_stats = {
-            "total": 0,
-            "completed": 0,
-            "active": 0,
-            "volume": 0.0,
-            "avg_deal": 0.0,
-            "biggest": 0.0,
-            "reliability": "100%",
-            "avg_completion": f"{random.randint(10, 20)}m",
-            "last_active": "just now",
-            "referrals": 0,
-            "kitna_kamaya": "$0.00",
-            "withdrawn": "$0.00",
-        }
-        msg = build_stats_message(full_name, zero_stats, True)
+        # Self stats: /stats
+        user = update.message.from_user
+        user_id = user.id
+        full_name = user.full_name or "Unknown"
+
+        fixed_stats = get_user_stats(user_id)
+        if not fixed_stats and user.username:
+            fixed_stats = get_user_stats(f"@{user.username}")
+
+        if fixed_stats:
+            is_new = fixed_stats.get("is_new_user", False)
+            msg = build_stats_message(full_name, fixed_stats, is_new)
+        else:
+            zero_stats = {
+                "total": 0,
+                "completed": 0,
+                "active": 0,
+                "volume": 0.0,
+                "avg_deal": 0.0,
+                "biggest": 0.0,
+                "reliability": "100%",
+                "avg_completion": f"{random.randint(10, 20)}m",
+                "last_active": "just now",
+                "referrals": 0,
+                "kitna_kamaya": "$0.00",
+                "withdrawn": "$0.00",
+            }
+            msg = build_stats_message(full_name, zero_stats, True)
 
     await update.message.reply_text(msg, parse_mode="HTML")
 
