@@ -310,13 +310,19 @@ async def check_user_has_elite_bio(user_id):
     try:
         client = await init_telethon_client()
         if not client:
+            print(f"[BIO] No telethon client for {user_id}", flush=True)
             return False
         user = await client.get_entity(int(user_id))
         full = await client(
             GetFullUserRequest(user)
         )
         bio = full.full_user.about or ""
-        return ELITE_BIO_TAG.lower() in bio.lower()
+        tag_no_at = ELITE_BIO_TAG.lstrip("@").lower()
+        bio_lower = bio.lower()
+        found = tag_no_at in bio_lower
+        print(f"[BIO] user={user_id}, bio='{bio}', "
+              f"looking_for='{tag_no_at}', found={found}", flush=True)
+        return found
     except Exception as e:
         print(f"[BIO] Error checking bio for {user_id}: {e}",
               flush=True)
