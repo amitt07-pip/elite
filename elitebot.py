@@ -1048,13 +1048,8 @@ def build_release_keyboard(escrow_id):
         "↩️ Full Refund (Buyer Only)",
         callback_data=f"release:{escrow_id}:refund"
     )
-    partial = InlineKeyboardButton(
-        "Partial(Both)",
-        callback_data=f"release:{escrow_id}:partial"
-    )
     return InlineKeyboardMarkup([
-        [full_release, full_refund],
-        [partial]
+        [full_release, full_refund]
     ])
 
 
@@ -1084,6 +1079,17 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
     seller_status = "✅" if seller_confirmed else "⏳"
     buyer_status = "✅" if buyer_confirmed else "⏳"
 
+    if flow_type == "release":
+        confirm_lines = (
+            f"{seller_status} <b>Seller confirm</b>: {seller}\n"
+            f"{buyer_status} <b>Buyer confirm</b>: {buyer}"
+        )
+    else:
+        confirm_lines = (
+            f"{buyer_status} <b>Buyer confirm</b>: {buyer}\n"
+            f"{seller_status} <b>Seller confirm</b>: {seller}"
+        )
+
     message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
 ━━━━━━━━━━━━━━━━━━━━
 🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
@@ -1103,8 +1109,7 @@ def build_final_confirm_message(escrow_id, data, flow_type="release",
 ⚠ <i>Security</i>: This room blocks human-posted addresses. Ignore any address sent by users/admins—only trust this pinned bot card.
 
 <b>Status</b>: Full {action_word} (double confirm).
-{seller_status} <b>Seller confirm</b>: {seller}
-{buyer_status} <b>Buyer confirm</b>: {buyer}
+{confirm_lines}
 <i>After both confirm, {address_party} will paste address.</i>"""
 
     return message
@@ -1311,18 +1316,18 @@ def build_release_confirm_keyboard(escrow_id, seller_confirmed=False,
     return InlineKeyboardMarkup(buttons)
 
 
-def build_refund_confirm_keyboard(escrow_id, seller_confirmed=False,
-                                   buyer_confirmed=False):
+def build_refund_confirm_keyboard(escrow_id, buyer_confirmed=False,
+                                   seller_confirmed=False):
     row = []
-    if not seller_confirmed:
-        row.append(InlineKeyboardButton(
-            "✅ Seller Confirm",
-            callback_data=f"refconfirm:{escrow_id}:seller"
-        ))
     if not buyer_confirmed:
         row.append(InlineKeyboardButton(
             "✅ Buyer Confirm",
             callback_data=f"refconfirm:{escrow_id}:buyer"
+        ))
+    if not seller_confirmed:
+        row.append(InlineKeyboardButton(
+            "✅ Seller Confirm",
+            callback_data=f"refconfirm:{escrow_id}:seller"
         ))
     buttons = []
     if row:
@@ -1338,16 +1343,28 @@ def build_payout_final_keyboard(escrow_id, flow_type="release",
                                  buyer_confirmed=False):
     prefix = "relfinal" if flow_type == "release" else "reffinal"
     row = []
-    if not seller_confirmed:
-        row.append(InlineKeyboardButton(
-            "✅ Seller Confirm",
-            callback_data=f"{prefix}:{escrow_id}:seller"
-        ))
-    if not buyer_confirmed:
-        row.append(InlineKeyboardButton(
-            "✅ Buyer Confirm",
-            callback_data=f"{prefix}:{escrow_id}:buyer"
-        ))
+    if flow_type == "release":
+        if not seller_confirmed:
+            row.append(InlineKeyboardButton(
+                "✅ Seller Confirm",
+                callback_data=f"{prefix}:{escrow_id}:seller"
+            ))
+        if not buyer_confirmed:
+            row.append(InlineKeyboardButton(
+                "✅ Buyer Confirm",
+                callback_data=f"{prefix}:{escrow_id}:buyer"
+            ))
+    else:
+        if not buyer_confirmed:
+            row.append(InlineKeyboardButton(
+                "✅ Buyer Confirm",
+                callback_data=f"{prefix}:{escrow_id}:buyer"
+            ))
+        if not seller_confirmed:
+            row.append(InlineKeyboardButton(
+                "✅ Seller Confirm",
+                callback_data=f"{prefix}:{escrow_id}:seller"
+            ))
     back_btn = InlineKeyboardButton(
         "⬅️ Back", callback_data=f"{prefix}:{escrow_id}:back"
     )
@@ -1421,104 +1438,6 @@ def build_released_message(escrow_id, data):
 📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
 
 <b>Status</b>: 🔓 Released (payout sent)."""
-
-    return message
-
-
-def build_partial_refund_message(escrow_id, data, confirmations):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
-    amount = data["amount"]
-    rate = data["rate"]
-    total_inr = data["total_inr"]
-    time_val = escape_html(data["time"])
-
-    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
-        get_fees_from_escrow(data)
-
-    escrow_id_str = f"{escrow_id:010d}"
-
-    message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
-━━━━━━━━━━━━━━━━━━━━
-🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: {buyer_promo}
-👤 <b>Seller promo</b>: {seller_promo}
-
-✅ <b>Seller</b>: {seller}
-✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT
-💱 <b>Rate</b>: {rate:.1f} INR/USDT
-💰 <b>Total INR</b>: ₹{total_inr:.1f}
-🕒 <b>Time</b>: {time_val}
-
-📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
-
-<b>Status</b>: ✅ Deposit VERIFIED.
-Choose <b>Full Release</b> to send all USDT to buyer, or \
-<b>Partial / Refund</b> to split between buyer and seller.
-<i>Only seller</i> can start release; both must confirm.
-
-<b>Partial Release / Refund:</b>
-Seller & buyer must both confirm below.
-Use ↩️ Back to cancel."""
-
-    return message
-
-
-def build_partial_refund_keyboard(escrow_id, confirmations):
-    seller_confirm = InlineKeyboardButton(
-        "✅ Seller Confirm...",
-        callback_data=f"refund:{escrow_id}:seller_confirm"
-    )
-    buyer_confirm = InlineKeyboardButton(
-        "✅ Buyer Confirm...",
-        callback_data=f"refund:{escrow_id}:buyer_confirm"
-    )
-    count_btn = InlineKeyboardButton(
-        f"🧩 Confirmations: {confirmations}/2",
-        callback_data=f"refund:{escrow_id}:count"
-    )
-    back_btn = InlineKeyboardButton(
-        "↩️ Back",
-        callback_data=f"refund:{escrow_id}:back"
-    )
-    return InlineKeyboardMarkup([
-        [seller_confirm, buyer_confirm],
-        [count_btn],
-        [back_btn]
-    ])
-
-
-def build_buyer_initiated_refund_message(escrow_id, data):
-    seller = escape_html(data["seller"])
-    buyer = escape_html(data["buyer"])
-    amount = data["amount"]
-    rate = data["rate"]
-    total_inr = data["total_inr"]
-    time_val = escape_html(data["time"])
-
-    buyer_fee, seller_fee, total_fee, buyer_promo, seller_promo = \
-        get_fees_from_escrow(data)
-
-    escrow_id_str = f"{escrow_id:010d}"
-
-    message = f"""🟢 Escrow • <code>{escrow_id_str}</code>
-━━━━━━━━━━━━━━━━━━━━
-🧾 <b>This deal fee</b>: Buyer <code>{buyer_fee:.2f}</code> USDT • Seller <code>{seller_fee:.2f}</code> USDT • Total <code>{total_fee:.2f}</code> USDT
-👤 <b>Buyer promo</b>: {buyer_promo}
-👤 <b>Seller promo</b>: {seller_promo}
-
-✅ <b>Seller</b>: {seller}
-✅ <b>Buyer</b>: {buyer}
-💵 <b>Amount</b>: {amount:.1f} USDT
-💱 <b>Rate</b>: {rate:.1f} INR/USDT
-💰 <b>Total INR</b>: ₹{total_inr:.1f}
-🕒 <b>Time</b>: {time_val}
-
-📥 <b>Received(on-chain)</b>: {amount:.1f} USDT (≈₹{total_inr:.1f})
-
-<b>Status</b>: Buyer initiated refund.
-Seller must provide BEP-20 address to receive funds."""
 
     return message
 
@@ -1991,74 +1910,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
-    # Legacy flow: direct address collection (for partial refund)
-    if escrow_id and escrow and (awaiting_buyer or awaiting_seller):
-        user_id = update.message.from_user.id
-        seller_user_id = escrow.get("seller_user_id")
-        buyer_user_id = escrow.get("buyer_user_id")
-
-        if awaiting_buyer and user_id != buyer_user_id:
-            return
-        if awaiting_seller and user_id != seller_user_id:
-            return
-
-        addr_match = re.search(r'0x[a-fA-F0-9]{40}', text)
-        if not addr_match:
-            return
-
-        wallet_address = addr_match.group(0)
-        amount = escrow.get("amount", 0)
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"✅ Sending <b>{amount:.1f} USDT</b> to "
-                 f"{'buyer' if awaiting_buyer else 'seller'} wallet...",
-            parse_mode="HTML"
-        )
-
-        fee_msg_id = escrow.get("room_fee_message_id")
-        if fee_msg_id:
-            released_msg = build_released_message(escrow_id, escrow)
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=fee_msg_id,
-                    text=released_msg,
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
-
-        update_escrow(escrow_id, {
-            "awaiting_buyer_address": False,
-            "awaiting_seller_address": False,
-            "payout_address": wallet_address,
-            "released": True
-        })
-
-        room_chat_id = escrow.get("room_chat_id")
-        if room_chat_id:
-            chat_str = str(room_chat_id)
-            if chat_str.startswith("-100"):
-                internal_id = chat_str[4:]
-            else:
-                internal_id = chat_str
-            group_link = f"https://t.me/c/{internal_id}/1"
-        else:
-            group_link = "N/A"
-
-        deal_msg = build_deal_completed_message(escrow_id, escrow, group_link)
-        try:
-            await context.bot.send_message(
-                chat_id=DEAL_CHANNEL_ID,
-                text=deal_msg,
-                parse_mode="HTML"
-            )
-        except Exception:
-            pass
-
-        return
-
     # Delete any crypto address posted in escrow room silently
     if escrow_id and escrow:
         addr_match = re.search(r'0x[a-fA-F0-9]{40}', text)
@@ -2125,10 +1976,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data.startswith("reffinal:"):
         await handle_refund_final(update, context)
-        return
-
-    if query.data.startswith("refund:"):
-        await handle_refund(update, context)
         return
 
     if not query.data.startswith("escrow:"):
@@ -2527,27 +2374,6 @@ async def handle_release(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await query.answer()
 
-        elif action == "partial":
-            # Partial - buyer only to initiate
-            if user_id != buyer_user_id:
-                await query.answer("Buyer only.", show_alert=True)
-                return
-
-            update_escrow(escrow_id, {
-                "refund_seller_confirmed": False,
-                "refund_buyer_confirmed": False
-            })
-
-            new_message = build_partial_refund_message(escrow_id, escrow, 0)
-            new_keyboard = build_partial_refund_keyboard(escrow_id, 0)
-
-            await query.edit_message_text(
-                text=new_message,
-                parse_mode="HTML",
-                reply_markup=new_keyboard
-            )
-
-            await query.answer("Partial initiated!")
 
 
 async def handle_release_confirm(update: Update,
@@ -2785,7 +2611,7 @@ async def handle_refund_confirm(update: Update,
                 seller_confirmed=seller_ok, buyer_confirmed=buyer_ok
             )
             kb = build_refund_confirm_keyboard(
-                escrow_id, seller_ok, buyer_ok
+                escrow_id, buyer_ok, seller_ok
             )
             await query.edit_message_text(
                 text=msg, parse_mode="HTML", reply_markup=kb
@@ -3163,117 +2989,6 @@ async def handle_refund_final(update: Update,
                 text=payout_msg, parse_mode="HTML",
                 reply_markup=payout_kb
             )
-            await query.answer("Confirmed!")
-
-
-async def handle_refund(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle partial refund callbacks (refund:...)."""
-    query = update.callback_query
-
-    parts = query.data.split(":")
-    if len(parts) != 3:
-        await query.answer("Invalid callback data")
-        return
-
-    escrow_id = int(parts[1])
-    action = parts[2]
-
-    async with state_lock:
-        escrow = get_escrow(escrow_id)
-        if not escrow:
-            await query.answer("Escrow not found")
-            return
-
-        user_id = query.from_user.id
-        seller_user_id = escrow.get("seller_user_id")
-        buyer_user_id = escrow.get("buyer_user_id")
-
-        if action == "count":
-            await query.answer("Waiting for both confirmations")
-            return
-
-        if action == "back":
-            update_escrow(escrow_id, {
-                "refund_seller_confirmed": False,
-                "refund_buyer_confirmed": False
-            })
-
-            received_amount = escrow.get("deposit_amount")
-            verified_msg = build_deposit_verified_message(
-                escrow_id, escrow, received_amount
-            )
-            release_keyboard = build_release_keyboard(escrow_id)
-
-            await query.edit_message_text(
-                text=verified_msg,
-                parse_mode="HTML",
-                reply_markup=release_keyboard
-            )
-
-            await query.answer("Back to release options")
-            return
-
-        if action == "seller_confirm":
-            if user_id != seller_user_id:
-                await query.answer(
-                    "Only the seller can press this button",
-                    show_alert=True
-                )
-                return
-
-            if escrow.get("refund_seller_confirmed"):
-                await query.answer("Already confirmed")
-                return
-
-            update_escrow(escrow_id, {"refund_seller_confirmed": True})
-            escrow["refund_seller_confirmed"] = True
-
-        elif action == "buyer_confirm":
-            if user_id != buyer_user_id:
-                await query.answer(
-                    "Only the buyer can press this button",
-                    show_alert=True
-                )
-                return
-
-            if escrow.get("refund_buyer_confirmed"):
-                await query.answer("Already confirmed")
-                return
-
-            update_escrow(escrow_id, {"refund_buyer_confirmed": True})
-            escrow["refund_buyer_confirmed"] = True
-
-        seller_ok = escrow.get("refund_seller_confirmed", False)
-        buyer_ok = escrow.get("refund_buyer_confirmed", False)
-        confirmations = (1 if seller_ok else 0) + (1 if buyer_ok else 0)
-
-        if confirmations == 2:
-            update_escrow(escrow_id, {"awaiting_seller_address": True})
-
-            new_message = build_buyer_initiated_refund_message(
-                escrow_id, escrow
-            )
-
-            await query.edit_message_text(
-                text=new_message,
-                parse_mode="HTML"
-            )
-
-            await query.answer("Both confirmed! Awaiting seller address.")
-        else:
-            new_message = build_partial_refund_message(
-                escrow_id, escrow, confirmations
-            )
-            new_keyboard = build_partial_refund_keyboard(
-                escrow_id, confirmations
-            )
-
-            await query.edit_message_text(
-                text=new_message,
-                parse_mode="HTML",
-                reply_markup=new_keyboard
-            )
-
             await query.answer("Confirmed!")
 
 
