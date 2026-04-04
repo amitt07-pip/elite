@@ -210,6 +210,38 @@ async def resolve_full_name_via_telethon(username):
         return None
 
 
+async def resolve_uid_via_telethon(username):
+    """Resolve a username to numeric user_id via Telethon API."""
+    try:
+        client = await init_telethon_client()
+        if not client:
+            return None
+        entity = await client.get_entity(username.strip().lstrip("@"))
+        return entity.id
+    except Exception as e:
+        print(f"[STATS] Telethon UID resolve failed for {username}: {e}",
+              flush=True)
+        return None
+
+
+async def find_fixed_stats_by_username_async(username):
+    """Async version: look up fixed stats, falling back to Telethon."""
+    # First try the sync lookup (escrow history)
+    result = find_fixed_stats_by_username(username)
+    if result:
+        return result
+    # Fallback: resolve username → user_id via Telethon
+    uid = await resolve_uid_via_telethon(username)
+    if uid:
+        result = get_user_stats(str(uid))
+        if result:
+            return result
+        result = get_user_stats(uid)
+        if result:
+            return result
+    return None
+
+
 def resolve_username_to_uid(username):
     """Resolve a @username to a numeric user_id via past escrows."""
     if not username:
@@ -1581,7 +1613,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         form_chat_id = update.message.chat_id
 
         # Seller stats → shown to buyer
-        seller_fixed = find_fixed_stats_by_username(seller_un)
+        seller_fixed = await find_fixed_stats_by_username_async(seller_un)
         if seller_fixed:
             s_role = seller_fixed.get("role", "")
             if s_role == "heavy":
@@ -1592,12 +1624,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 s_title = "🍼 Bachkana Dealer"
             s_total = seller_fixed.get("total", 0)
             s_completed = seller_fixed.get("completed", 0)
-            s_name = resolve_full_name(seller_un)
+            s_name = await resolve_full_name_via_telethon(seller_un)
+            if not s_name:
+                s_name = resolve_full_name(seller_un)
         else:
             s_title = "🍼 Bachkana Dealer"
             s_total = 0
             s_completed = 0
-            s_name = resolve_full_name(seller_un)
+            s_name = await resolve_full_name_via_telethon(seller_un)
+            if not s_name:
+                s_name = resolve_full_name(seller_un)
 
         buyer_stats_msg = (
             f"Hi @{escape_html(buyer_un)}, your Seller "
@@ -1613,7 +1649,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # Buyer stats → shown to seller
-        buyer_fixed = find_fixed_stats_by_username(buyer_un)
+        buyer_fixed = await find_fixed_stats_by_username_async(buyer_un)
         if buyer_fixed:
             b_role = buyer_fixed.get("role", "")
             if b_role == "heavy":
@@ -1624,12 +1660,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 b_title = "🍼 Bachkana Dealer"
             b_total = buyer_fixed.get("total", 0)
             b_completed = buyer_fixed.get("completed", 0)
-            b_name = resolve_full_name(buyer_un)
+            b_name = await resolve_full_name_via_telethon(buyer_un)
+            if not b_name:
+                b_name = resolve_full_name(buyer_un)
         else:
             b_title = "🍼 Bachkana Dealer"
             b_total = 0
             b_completed = 0
-            b_name = resolve_full_name(buyer_un)
+            b_name = await resolve_full_name_via_telethon(buyer_un)
+            if not b_name:
+                b_name = resolve_full_name(buyer_un)
 
         seller_stats_msg = (
             f"Hi @{escape_html(seller_un)}, your Buyer "
@@ -3687,8 +3727,8 @@ async def handle_stats_command(update: Update,
         if not full_name:
             full_name = resolve_full_name(target_username)
 
-        # Try to find fixed stats by username
-        fixed_stats = find_fixed_stats_by_username(target_username)
+        # Try to find fixed stats by username (with Telethon fallback)
+        fixed_stats = await find_fixed_stats_by_username_async(target_username)
 
         if fixed_stats:
             is_new = fixed_stats.get("is_new_user", False)
