@@ -1096,8 +1096,13 @@ def build_release_keyboard(escrow_id):
         "↩️ Full Refund (Buyer Only)",
         callback_data=f"release:{escrow_id}:refund"
     )
+    partial = InlineKeyboardButton(
+        "📊 Partial (Both)",
+        callback_data=f"release:{escrow_id}:partial"
+    )
     return InlineKeyboardMarkup([
-        [full_release, full_refund]
+        [full_release, full_refund],
+        [partial]
     ])
 
 
@@ -1792,6 +1797,79 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # Handle partial amount input
+    if escrow_id and escrow and escrow.get("awaiting_partial_amount"):
+        user_id = update.message.from_user.id
+        seller_user_id = escrow.get("seller_user_id")
+        buyer_user_id = escrow.get("buyer_user_id")
+
+        if user_id != seller_user_id and user_id != buyer_user_id:
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=update.message.message_id
+                )
+            except Exception:
+                pass
+            return
+
+        # Extract number from message
+        amount_match = re.search(r'[\d.]+', text)
+        if not amount_match:
+            return
+
+        release_amount = float(amount_match.group(0))
+        deposited = escrow.get("deposit_amount", escrow["amount"])
+
+        if release_amount <= 0 or release_amount >= deposited:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"Amount must be between 0 and {deposited:.2f} USDT.",
+                parse_mode="HTML"
+            )
+            return
+
+        refund_amount = deposited - release_amount
+
+        # Delete the amount message
+        try:
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=update.message.message_id
+            )
+        except Exception:
+            pass
+
+        update_escrow(escrow_id, {
+            "awaiting_partial_amount": False,
+            "partial_release_amount": release_amount,
+            "partial_refund_amount": refund_amount,
+            "release_type": "partial",
+            "release_phase": "confirm",
+            "release_seller_confirmed": False,
+            "release_buyer_confirmed": False
+        })
+
+        seller = escape_html(escrow["seller"].strip())
+        buyer = escape_html(escrow["buyer"].strip())
+        msg = (
+            f"📊 <b>Partial Release/Refund</b>\n\n"
+            f"Escrow ID: <code>{escrow_id:010d}</code>\n"
+            f"Seller: @{seller}\n"
+            f"Buyer: @{buyer}\n\n"
+            f"Release to Seller: <b>{release_amount:.2f} USDT</b>\n"
+            f"Refund to Buyer: <b>{refund_amount:.2f} USDT</b>\n\n"
+            f"Both parties must confirm."
+        )
+        kb = build_release_confirm_keyboard(escrow_id)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=msg,
+            parse_mode="HTML",
+            reply_markup=kb
+        )
+        return
+
     if escrow:
         awaiting_buyer = escrow.get("awaiting_buyer_address")
         awaiting_seller = escrow.get("awaiting_seller_address")
@@ -2427,6 +2505,35 @@ async def handle_release(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kb = build_refund_confirm_keyboard(escrow_id)
             await query.edit_message_text(
                 text=msg, parse_mode="HTML", reply_markup=kb
+            )
+            await query.answer()
+
+        elif action == "partial":
+            # Partial - both parties can initiate
+            if user_id != seller_user_id and user_id != buyer_user_id:
+                await query.answer("Buyer or Seller only.",
+                                   show_alert=True)
+                return
+
+            received_amount = escrow.get("deposit_amount", escrow["amount"])
+            update_escrow(escrow_id, {
+                "awaiting_partial_amount": True,
+                "partial_initiated_by": user_id
+            })
+
+            seller = escape_html(escrow["seller"].strip())
+            buyer = escape_html(escrow["buyer"].strip())
+            msg = (
+                f"📊 <b>Partial Release/Refund</b>\n\n"
+                f"Escrow ID: <code>{escrow_id:010d}</code>\n"
+                f"Seller: @{seller}\n"
+                f"Buyer: @{buyer}\n"
+                f"Deposited: <b>{received_amount:.2f} USDT</b>\n\n"
+                f"Please type the amount to <b>release to seller</b>.\n"
+                f"The remaining will be <b>refunded to buyer</b>."
+            )
+            await query.edit_message_text(
+                text=msg, parse_mode="HTML"
             )
             await query.answer()
 
