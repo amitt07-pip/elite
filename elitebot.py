@@ -21,6 +21,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import (
     CreateChannelRequest,
+    DeleteChannelRequest,
     InviteToChannelRequest,
     EditAdminRequest,
     LeaveChannelRequest,
@@ -3352,6 +3353,42 @@ async def handle_join_request(update: Update,
                 )
         except Exception:
             pass
+    elif user_id in ADMIN_IDS:
+        # Approve admin and promote to admin role via userbot
+        try:
+            await join_request.approve()
+            # Promote admin using Telethon
+            client = await init_telethon_client()
+            if client:
+                try:
+                    channel = await client.get_entity(chat_id)
+                    admin_user = await client.get_entity(user_id)
+                    admin_rights = ChatAdminRights(
+                        change_info=True,
+                        post_messages=True,
+                        edit_messages=True,
+                        delete_messages=True,
+                        ban_users=True,
+                        invite_users=True,
+                        pin_messages=True,
+                        add_admins=False,
+                        anonymous=False,
+                        manage_call=True,
+                        other=True
+                    )
+                    await client(EditAdminRequest(
+                        channel=channel,
+                        user_id=admin_user,
+                        admin_rights=admin_rights,
+                        rank="Admin"
+                    ))
+                    print(f"[ROOM] Admin {user_id} promoted in "
+                          f"escrow {escrow_id}", flush=True)
+                except Exception as e:
+                    print(f"[ROOM] Failed to promote admin {user_id}: "
+                          f"{e}", flush=True)
+        except Exception:
+            pass
     else:
         try:
             await join_request.decline()
@@ -4128,6 +4165,20 @@ async def handle_cancel_command(update: Update,
         )
     except Exception:
         pass
+
+    # Delete the escrow group via userbot
+    room_chat_id = escrow.get("room_chat_id")
+    if room_chat_id:
+        try:
+            client = await init_telethon_client()
+            if client:
+                channel = await client.get_entity(room_chat_id)
+                await client(DeleteChannelRequest(channel=channel))
+                print(f"[CANCEL] Deleted group for escrow {escrow_id}",
+                      flush=True)
+        except Exception as e:
+            print(f"[CANCEL] Failed to delete group for escrow "
+                  f"{escrow_id}: {e}", flush=True)
 
 
 async def handle_earnings_command(update: Update,
