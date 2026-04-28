@@ -56,6 +56,7 @@ Time:</code>
 STATE_FILE = "escrow_state.json"
 ESCROWS_FILE = "escrows.json"
 USER_STATS_FILE = "user_stats.json"
+BLACKLIST_FILE = "blacklist.json"
 
 TELETHON_API_ID = 38828234
 TELETHON_API_HASH = "99d96d08bc57f882907032a2f8f65b46"
@@ -67,6 +68,22 @@ USERBOT_ID = None
 
 state_lock = asyncio.Lock()
 telethon_client = None
+
+
+def load_blacklist():
+    if os.path.exists(BLACKLIST_FILE):
+        with open(BLACKLIST_FILE, "r") as f:
+            return set(json.load(f))
+    return set()
+
+
+def save_blacklist(bl):
+    with open(BLACKLIST_FILE, "w") as f:
+        json.dump(list(bl), f)
+
+
+def is_blacklisted(user_id):
+    return user_id in load_blacklist()
 
 
 def load_state():
@@ -1535,6 +1552,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
 
+    if update.message.from_user and is_blacklisted(update.message.from_user.id):
+        return
+
     if update.message.chat.type not in ("group", "supergroup"):
         return
 
@@ -2067,6 +2087,10 @@ def normalize_username(username):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+
+    if query.from_user and is_blacklisted(query.from_user.id):
+        await query.answer("You are blacklisted.", show_alert=True)
+        return
 
     if query.data.startswith("noop:"):
         await query.answer()
@@ -3885,6 +3909,8 @@ async def handle_start_command(update: Update,
                                context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
+    if update.message.from_user and is_blacklisted(update.message.from_user.id):
+        return
 
     await update.message.reply_text(
         "Elite Escrow Bot v6 running as @Ecrowebot\n"
@@ -3942,6 +3968,8 @@ Name: <b>{escape_html(full_name)}</b>
 async def handle_stats_command(update: Update,
                                context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
+        return
+    if is_blacklisted(update.message.from_user.id):
         return
 
     args = context.args or []
@@ -4065,6 +4093,92 @@ def mask_address(address):
     if not address or len(address) < 10:
         return address or "N/A"
     return f"{address[:4]}{'*' * (len(address) - 8)}{address[-4:]}"
+
+
+async def handle_blacklist_command(update: Update,
+                                   context: ContextTypes.DEFAULT_TYPE):
+    """Admin command: /black @username | user_id | reply to message.
+    Blacklists a user from all bot functions."""
+    if not update.message or not update.message.from_user:
+        return
+
+    user_id = update.message.from_user.id
+    if user_id not in ADMIN_IDS and user_id != OWNER_ID:
+        await update.message.reply_text("❌ Admin only.")
+        return
+
+    target_uid = None
+    target_display = None
+
+    args = context.args or []
+
+    if update.message.reply_to_message and update.message.reply_to_message.from_user:
+        # Reply to a message
+        target_uid = update.message.reply_to_message.from_user.id
+        target_display = (
+            update.message.reply_to_message.from_user.full_name
+            or str(target_uid)
+        )
+    elif len(args) > 0:
+        target = args[0].strip()
+        if target.startswith("@"):
+            # Resolve @username to user_id via Telethon
+            resolved = await resolve_uid_via_telethon(target.lstrip("@"))
+            if resolved:
+                target_uid = resolved
+                target_display = target
+            else:
+                # Try resolve from past escrows
+                resolved2 = resolve_username_to_uid(target)
+                if resolved2:
+                    target_uid = int(resolved2)
+                    target_display = target
+                else:
+                    await update.message.reply_text(
+                        f"❌ Could not resolve {target} to a user ID."
+                    )
+                    return
+        else:
+            try:
+                target_uid = int(target)
+                target_display = str(target_uid)
+            except ValueError:
+                await update.message.reply_text(
+                    "Usage: /black @username or /black user_id "
+                    "or reply to a message"
+                )
+                return
+    else:
+        await update.message.reply_text(
+            "Usage: /black @username or /black user_id "
+            "or reply to a message"
+        )
+        return
+
+    # Don't allow blacklisting admins
+    if target_uid in ADMIN_IDS or target_uid == OWNER_ID:
+        await update.message.reply_text("❌ Cannot blacklist an admin.")
+        return
+
+    bl = load_blacklist()
+    if target_uid in bl:
+        # Already blacklisted — remove (toggle)
+        bl.discard(target_uid)
+        save_blacklist(bl)
+        await update.message.reply_text(
+            f"✅ <b>Unblacklisted</b>: {escape_html(str(target_display))} "
+            f"(<code>{target_uid}</code>)",
+            parse_mode="HTML"
+        )
+    else:
+        bl.add(target_uid)
+        save_blacklist(bl)
+        await update.message.reply_text(
+            f"🚫 <b>Blacklisted</b>: {escape_html(str(target_display))} "
+            f"(<code>{target_uid}</code>)\n\n"
+            f"This user can no longer use any bot function.",
+            parse_mode="HTML"
+        )
 
 
 async def handle_verify_command(update: Update,
@@ -4268,6 +4382,8 @@ async def handle_earnings_command(update: Update,
                                   context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
         return
+    if is_blacklisted(update.message.from_user.id):
+        return
 
     msg = (
         f"👥 Referred users: 0\n"
@@ -4288,6 +4404,8 @@ async def handle_earnings_command(update: Update,
 async def handle_refer_command(update: Update,
                                context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
+        return
+    if is_blacklisted(update.message.from_user.id):
         return
 
     user_id = update.message.from_user.id
@@ -4504,6 +4622,7 @@ app.add_handler(CommandHandler("refer", handle_refer_command))
 app.add_handler(CommandHandler("earnings", handle_earnings_command))
 app.add_handler(CommandHandler("cancel", handle_cancel_command))
 app.add_handler(CommandHandler("override", handle_override_command))
+app.add_handler(CommandHandler("black", handle_blacklist_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
