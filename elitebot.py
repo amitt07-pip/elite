@@ -913,10 +913,10 @@ def build_fee_acceptance_keyboard(escrow_id):
 
 
 ESCROW_ADDRESSES = [
-    "0x8c640881238BEC28509bB3a8F37Dbf3398668a4F",
+    "0xa3D0e7da537057cbeC62A48235FbEc8BB38B4E08",
 ]
 BSCSCAN_API_KEY = "1JPI1W7W26UICIYDQNAEE2M1D7A7B3IUIS"
-DEPOSIT_ADDRESS = "0x8c640881238BEC28509bB3a8F37Dbf3398668a4F"
+DEPOSIT_ADDRESS = "0xa3D0e7da537057cbeC62A48235FbEc8BB38B4E08"
 USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955"
 DEPOSIT_POLL_INTERVAL = 20  # seconds between BscScan polls
 
@@ -3722,6 +3722,89 @@ async def handle_fk_command(update: Update,
     )
 
 
+async def handle_override_command(update: Update,
+                                  context: ContextTypes.DEFAULT_TYPE):
+    """Admin command: /override [escrow_id] [address] - override escrow address.
+    Works before and after deposit address is sent. Edits pinned message if exists."""
+    if not update.message:
+        return
+
+    # Only allow in bot DM (private chat)
+    if update.message.chat.type != "private":
+        return
+
+    user_id = update.message.from_user.id
+    if user_id not in ADMIN_IDS and user_id != OWNER_ID:
+        return
+
+    args = context.args or []
+    if len(args) != 2:
+        await update.message.reply_text(
+            "Usage: /override [escrow_id] [address]",
+            parse_mode="HTML"
+        )
+        return
+
+    try:
+        escrow_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text(
+            "Invalid escrow ID.",
+            parse_mode="HTML"
+        )
+        return
+
+    new_address = args[1].strip()
+    if not new_address.startswith("0x") or len(new_address) != 42:
+        await update.message.reply_text(
+            "Invalid address. Must be a 42-char hex address starting with 0x.",
+            parse_mode="HTML"
+        )
+        return
+
+    escrow = get_escrow(escrow_id)
+    if not escrow:
+        await update.message.reply_text(
+            f"Escrow {escrow_id} not found.",
+            parse_mode="HTML"
+        )
+        return
+
+    # Store the override address
+    update_escrow(escrow_id, {"escrow_address": new_address})
+
+    escrow_id_str = f"{escrow_id:010d}"
+
+    # Try to edit the pinned deposit message if it exists
+    room_chat_id = escrow.get("room_chat_id")
+    room_fee_msg_id = escrow.get("room_fee_message_id")
+    edited = False
+    if room_chat_id and room_fee_msg_id:
+        try:
+            updated_escrow = get_escrow(escrow_id)
+            deposit_msg = build_deposit_message(
+                escrow_id, updated_escrow, new_address
+            )
+            await context.bot.edit_message_text(
+                chat_id=room_chat_id,
+                message_id=room_fee_msg_id,
+                text=deposit_msg,
+                parse_mode="HTML"
+            )
+            edited = True
+        except Exception:
+            pass
+
+    status = "Pinned message updated." if edited else "Will apply when deposit card appears."
+    await update.message.reply_text(
+        f"✅ <b>Address Override Set</b>\n\n"
+        f"🆔 Escrow: <code>{escrow_id_str}</code>\n"
+        f"🏦 Address: <code>{new_address}</code>\n\n"
+        f"{status}",
+        parse_mode="HTML"
+    )
+
+
 async def handle_escrow_command(update: Update,
                                 context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -4420,6 +4503,7 @@ app.add_handler(CommandHandler("verify", handle_verify_command))
 app.add_handler(CommandHandler("refer", handle_refer_command))
 app.add_handler(CommandHandler("earnings", handle_earnings_command))
 app.add_handler(CommandHandler("cancel", handle_cancel_command))
+app.add_handler(CommandHandler("override", handle_override_command))
 
 app.add_handler(
     MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
