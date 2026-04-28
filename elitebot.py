@@ -4514,4 +4514,26 @@ left_member_filter = filters.StatusUpdate.LEFT_CHAT_MEMBER
 app.add_handler(MessageHandler(new_members_filter, handle_new_chat_members))
 app.add_handler(MessageHandler(left_member_filter, handle_left_chat_member))
 app.add_handler(ChatJoinRequestHandler(handle_join_request))
+
+
+async def post_init(application):
+    """Resume deposit monitors for active escrows after restart."""
+    escrows = load_escrows()
+    for eid_str, data in escrows.items():
+        if data.get("status") == "closed":
+            continue
+        if data.get("deposit_verified"):
+            continue
+        if not data.get("room_chat_id"):
+            continue
+        if not data.get("room_fee_message_id"):
+            continue
+        # This escrow has a room but deposit not yet verified — resume monitor
+        eid = int(eid_str)
+        print(f"[STARTUP] Resuming deposit monitor for escrow {eid}",
+              flush=True)
+        asyncio.ensure_future(monitor_deposit(application, eid))
+
+
+app.post_init = post_init
 app.run_polling()
